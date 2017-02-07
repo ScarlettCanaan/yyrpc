@@ -18,7 +18,7 @@ namespace rpc
 	};
 
 	//测试RPC方法
-	Response GetResponseTest1(void);
+	Response GetResponseTest1(int);
 	Response GetResponseTest2(int x, int y);
 	Response GetResponseTest3(std::string s);
 	Response GetResponseTest4(std::string &s, int x);
@@ -74,6 +74,41 @@ struct function_traits< std::function<R(Args...)> > {
 	};
 };
 
+template <typename Assertion>
+struct AssertValue : AssertionChecker<Assertion::value, Assertion>
+{
+        static_assert(AssertionValue, "Assertion failed <see below for more information>");
+            static bool const value = Assertion::value;
+
+};
+
+template< std::size_t I, typename Func>
+struct TupleUnpacker {
+	template <typename... Args>
+	static void unpackCheckHelper(Func func, Args ...args) {
+		auto myTuple = std::make_tuple(args...);
+		using traits = function_traits<decltype(func)>;
+        using func_traits_type = typename traits::template argument<I>::type;
+        using arg_traits_type = typename std::tuple_element<I, decltype(myTuple)>::type;
+		static_assert(std::is_same<func_traits_type, arg_traits_type>::value,
+			"RPC_CALL_ERROR: some invalid argument type");
+		TupleUnpacker<I - 1, decltype(func)>::unpackCheckHelper(func, args...);
+	}
+};
+
+template<typename Func>
+struct TupleUnpacker <0, Func> {
+	template <typename... Args>
+	static void unpackCheckHelper(Func func, Args ...args) {
+		auto myTuple = std::make_tuple(args...);
+		using traits = function_traits<decltype(func)>;
+        using func_traits_type = typename traits::template argument<0>::type;
+        using arg_traits_type = typename std::tuple_element<0, decltype(myTuple)>::type;
+		static_assert(std::is_same<func_traits_type, arg_traits_type>::value,
+			"RPC_CALL_ERROR: some invalid argument type");
+	}
+};
+
 template<typename Func, typename... Args>
 void RpcFunctionTraitsCheck(Func func, Args ...args) {
 	using traits = function_traits<decltype(func)>;
@@ -89,37 +124,16 @@ void RpcFunctionTraitsCheck(Func func) {
 	static_assert(traits::nargs == 0, "RPC_CALL_ERROR: the number of argument is not equal.");
 }
 
-template< std::size_t I, typename Func>
-struct TupleUnpacker {
-	template <typename... Args>
-	static void unpackCheckHelper(Func func, Args ...args) {
-		auto myTuple = std::make_tuple(args...);
-		using traits = function_traits<decltype(func)>;
-		static_assert(std::is_same<traits::argument<I>::type, std::tuple_element<I, decltype(myTuple) >::type>::value,
-			"RPC_CALL_ERROR: some invalid argument type");
-		TupleUnpacker<I - 1, decltype(func)>::unpackCheckHelper(func, args...);
-	}
-};
-
-template<typename Func>
-struct TupleUnpacker <0, Func> {
-	template <typename... Args>
-	static void unpackCheckHelper(Func func, Args ...args) {
-		auto myTuple = std::make_tuple(args...);
-		using traits = function_traits<decltype(func)>;
-		static_assert(std::is_same<traits::argument<0>::type, std::tuple_element<0, decltype(myTuple) >::type>::value,
-			"RPC_CALL_ERROR: some invalid argument type");
-	}
-};
-
 template<typename Func, typename... Args>
-auto SyncCall(const char* method_name, Func func, Args ...args) {
+void SyncCall(const char* method_name, Func func, Args ...args) {
 	RpcFunctionTraitsCheck(func, args...);
+    return;
 }
 
 template<typename Func>
-auto SyncCall(const char* method_name, Func func) {
+void SyncCall(const char* method_name, Func func) {
 	RpcFunctionTraitsCheck(func);
+    return;
 }
 
 #define SYNC_CALL(methed_name, ...) \
@@ -129,7 +143,7 @@ int main() {
 	int x, y;
 	std::string str, *pstr;
 	rpc::Request req, *preq;
-	const rpc::Request creq;
+	//const rpc::Request creq;
 	/*
 		Response GetResponseTest1(void);
 		Response GetResponseTest2(int x, int y);
@@ -138,20 +152,21 @@ int main() {
 		Response GetResponseTest5(const Request res, int x);
 		Response GetResponseTest5(const Request res, int x, int y, int z, int m, int n);
 	*/
-	SYNC_CALL(rpc::GetResponseTest1);				//accept
+
+	//SYNC_CALL(rpc::GetResponseTest1);				//accept
 	SYNC_CALL(rpc::GetResponseTest1, x);			//compiler error:向一个空签名的方法传值
 
-	SYNC_CALL(rpc::GetResponseTest2, x, y);			//accepet
-	SYNC_CALL(rpc::GetResponseTest2);				//compiler error:参数个数不匹配
-	SYNC_CALL(rpc::GetResponseTest2, x);			//compiler error:参数个数不匹配
-	SYNC_CALL(rpc::GetResponseTest2, str, y);		//compiler error:参数类型不匹配
+	//SYNC_CALL(rpc::GetResponseTest2, x, y);			//accepet
+	//SYNC_CALL(rpc::GetResponseTest2);				//compiler error:参数个数不匹配
+	//SYNC_CALL(rpc::GetResponseTest2, x);			//compiler error:参数个数不匹配
+	//SYNC_CALL(rpc::GetResponseTest2, str, y);		//compiler error:参数类型不匹配
 
-	SYNC_CALL(rpc::GetResponseTest3, str);			//accept
-	SYNC_CALL(rpc::GetResponseTest3, pstr);			//compiler error:参数类型不匹配
+	//SYNC_CALL(rpc::GetResponseTest3, str);			//accept
+	//SYNC_CALL(rpc::GetResponseTest3, pstr);			//compiler error:参数类型不匹配
 
-	SYNC_CALL(rpc::GetResponseTest4, str, x);		//accept
+	//SYNC_CALL(rpc::GetResponseTest4, str, x);		//accept
 
-	SYNC_CALL(rpc::GetResponseTest5, req, x);		//accept
-	SYNC_CALL(rpc::GetResponseTest5, creq, x);		//accept
-	SYNC_CALL(rpc::GetResponseTest5, preq, x);		//compiler error:参数类型不匹配
+	//SYNC_CALL(rpc::GetResponseTest5, req, x);		//accept
+	//SYNC_CALL(rpc::GetResponseTest5, creq, x);		//accept
+	//SYNC_CALL(rpc::GetResponseTest5, preq, x);		//compiler error:参数类型不匹配
 }
