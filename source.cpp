@@ -2,7 +2,9 @@
 #include <string>
 #include <functional>
 #include <type_traits>
+#include <boost/mpl/assert.hpp>
 
+//Test Case
 namespace rpc
 {
 	struct Response
@@ -18,13 +20,14 @@ namespace rpc
 	};
 
 	//测试RPC方法
-	Response GetResponseTest1(int);
+	Response GetResponseTest1(void);
 	Response GetResponseTest2(int x, int y);
 	Response GetResponseTest3(std::string s);
 	Response GetResponseTest4(std::string &s, int x);
 	Response GetResponseTest5(const Request res, int x);
 }
 
+//Specialize template declare (catch all case)
 template<typename T>
 struct function_traits;
 
@@ -63,6 +66,7 @@ template<typename R, typename base >
 struct function_traits< R(base::*)(void) > : public function_traits<R(void)> {
 };
 
+//general function
 template<typename R, typename ...Args>
 struct function_traits< std::function<R(Args...)> > {
 	static const size_t nargs = sizeof...(Args);
@@ -72,14 +76,6 @@ struct function_traits< std::function<R(Args...)> > {
 		static_assert(index < nargs, "RPC_CALL_ERROR: invalid parameter index.");
 		using type = typename std::tuple_element<index, std::tuple<Args...>>::type;
 	};
-};
-
-template <typename Assertion>
-struct AssertValue : AssertionChecker<Assertion::value, Assertion>
-{
-        static_assert(AssertionValue, "Assertion failed <see below for more information>");
-            static bool const value = Assertion::value;
-
 };
 
 template< std::size_t I, typename Func>
@@ -112,9 +108,7 @@ struct TupleUnpacker <0, Func> {
 template<typename Func, typename... Args>
 void RpcFunctionTraitsCheck(Func func, Args ...args) {
 	using traits = function_traits<decltype(func)>;
-	static_assert(traits::nargs != 0, "RPC_CALL_ERROR: pass arguments to a void arguments signature function.");
 	static_assert(sizeof...(args) == traits::nargs, "RPC_CALL_ERROR: the number of argument is not equal.");
-
 	TupleUnpacker<sizeof...(args)-1, decltype(func)>::unpackCheckHelper(func, args...);
 }
 
@@ -140,7 +134,7 @@ void SyncCall(const char* method_name, Func func) {
   SyncCall(#methed_name, methed_name, ##__VA_ARGS__)
 
 int main() {
-	int x, y;
+	double x, y;
 	std::string str, *pstr;
 	rpc::Request req, *preq;
 	//const rpc::Request creq;
@@ -154,12 +148,12 @@ int main() {
 	*/
 
 	//SYNC_CALL(rpc::GetResponseTest1);				//accept
-	SYNC_CALL(rpc::GetResponseTest1, x);			//compiler error:向一个空签名的方法传值
+	//SYNC_CALL(rpc::GetResponseTest1, x);			//compiler error:向一个空签名的方法传值
 
 	//SYNC_CALL(rpc::GetResponseTest2, x, y);			//accepet
 	//SYNC_CALL(rpc::GetResponseTest2);				//compiler error:参数个数不匹配
 	//SYNC_CALL(rpc::GetResponseTest2, x);			//compiler error:参数个数不匹配
-	//SYNC_CALL(rpc::GetResponseTest2, str, y);		//compiler error:参数类型不匹配
+	SYNC_CALL(rpc::GetResponseTest2, str, y);		//compiler error:参数类型不匹配
 
 	//SYNC_CALL(rpc::GetResponseTest3, str);			//accept
 	//SYNC_CALL(rpc::GetResponseTest3, pstr);			//compiler error:参数类型不匹配
