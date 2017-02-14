@@ -2,6 +2,11 @@
 #define YYRPC_SERIALIZATION_H_
 
 #include "type_traits/is_container.h"
+template<typename T>
+typename std::enable_if<is_container<T>::value, bool>::type serialization(std::stringstream& s, const T& t);
+
+template<typename T>
+typename std::enable_if<!is_container<T>::value, bool>::type serialization(std::stringstream& s, const T& t);
 
 template<typename T>
 bool serialization_other(std::stringstream& s, const T& t)
@@ -17,12 +22,14 @@ bool serialization_other(std::stringstream& s, const T& t)
 template<typename T>
 typename std::enable_if<std::is_array<T>::value, bool>::type serialization_array(std::stringstream& s, const T& t)
 {
-  static_assert(std::is_same<std::remove_extent<T>::type, std::remove_all_extents<T>::type>::value, "RPC_CALL_ERROR: array only support one-dimensional!");
+  using first_dimension_type = typename std::remove_extent<T>::type;
+  using deepest_dimension_type = typename std::remove_all_extents<T>::type;
+  static_assert(std::is_same<first_dimension_type, deepest_dimension_type>::value, "RPC_CALL_ERROR: array only support one-dimensional!");
   int array_size = std::extent<T>::value;
   for (int i = 0; i < array_size; ++i)
   {
     auto v = t[i];
-    using raw_type = typename std::remove_cv<typename std::remove_reference<std::remove_extent<T>::type>::type>::type;
+    using raw_type = typename std::remove_cv<typename std::remove_reference<first_dimension_type>::type>::type;
     serialization<raw_type>(s, v);
   }
   return true;
