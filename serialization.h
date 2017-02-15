@@ -2,13 +2,12 @@
 #define YYRPC_SERIALIZATION_H_
 
 #include "type_traits/is_container.h"
+
 #include <msgpack.hpp>
 #include <algorithm>
 
 template<typename T>
 typename std::enable_if<is_container<T>::value, bool>::type serialization(std::stringstream& s, const T& t);
-template<typename T>
-typename std::enable_if<!is_container<T>::value, bool>::type serialization(std::stringstream& s, const T& t);
 
 template<typename T>
 bool serialization_other(std::stringstream& s, const T& t)
