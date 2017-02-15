@@ -16,6 +16,7 @@ struct function_traits < R(Args...) >
 {
   static constexpr std::size_t nargs = sizeof...(Args);
   using return_type = R;
+  typedef R function_type(Args...);
   template <std::size_t index>
   struct argument { using type = typename std::tuple_element<index, std::tuple<Args...>>::type; };
 };

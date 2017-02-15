@@ -26,7 +26,7 @@ public:
 
   virtual ~TRpcPropertyBase() = default;
   virtual bool Accept(void* obj, const msgpack::object& s) const { return false; };
-  virtual std::string GetValue(void* obj) const { return ""; }
+  virtual void Pack(std::stringstream&, void* obj) const {}
 private:
   std::string name;
 };
@@ -46,16 +46,19 @@ public:
   TRpcProperty(const std::string& n, T M::* p);
 public:
   virtual bool Accept(void* obj, const msgpack::object& s) const override;
-  virtual std::string GetValue(void* obj) const override;
-private:
+  virtual void Pack(std::stringstream& s, void* obj) const override;
+public:
+  //union u_ptm_cast {
+    //T M::* pmember;
+    //T* pdata;
+  //} data;
   T M::* data;
 };
 
 template<typename M, typename T>
 TRpcProperty<M, T>::TRpcProperty(const std::string& n, T M::* p)
-  : TRpcPropertyBase(n), data(p)
+  : TRpcPropertyBase(n) ,data(p)
 {
-
 }
 
 template<typename M, typename T>
@@ -73,15 +76,11 @@ bool TRpcProperty<M, T>::Accept(void* obj, const msgpack::object& s) const
 }
 
 template<typename M, typename T>
-std::string TRpcProperty<M, T>::GetValue(void* obj) const
+void TRpcProperty<M, T>::Pack(std::stringstream &s, void* obj) const
 {
   M* m = (M*)obj;
-  std::ostringstream ss;
-  if (is_string<T>())
-    ss << "'" << m->*data << "'";
-  else
-    ss << m->*data;
-  return std::move(ss.str());
+  T _data = m->*data;
+  serialization(s, _data); 
 }
 
 template <typename M>
