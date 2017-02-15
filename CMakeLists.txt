@@ -1,0 +1,7 @@
+PROJECT(main) 
+SET(SRC_LIST test/main.cpp) 
+SET(CMAKE_CXX_COMPILER "g++") 
+SET(CMAKE_CXX_FLAGS "-std=c++11 -O3") 
+SET(CMAKE_BUILD_TYPE Release) 
+ADD_EXECUTABLE(porgram_name ${SRC_LIST})
+INSTALL(PROGRAMS porgram_name DESTINATION /usr/bin/)
