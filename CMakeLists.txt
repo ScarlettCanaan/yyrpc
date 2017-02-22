@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 add_subdirectory(src)
 SET_COMMON_TARGET_PROPERTIES(yyrpc)
 
