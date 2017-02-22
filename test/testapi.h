@@ -11,9 +11,11 @@ struct Request : public TRpcModelBase <Request>
   double memberDouble;
   std::string memberString;
   std::vector<int> memberVector;
+  Request(double _memberDouble, std::string _memberString, std::vector<int> _memberVector): memberDouble(_memberDouble), memberString(_memberString), memberVector(_memberVector) {}
+  Request() {}
 };
 
-YYRPC_MODEL_REGISTER(Request, memberDouble, memberString)
+YYRPC_MODEL_REGISTER(Request, memberDouble, memberString, memberVector)
 
 bool TestMethod(const std::vector<int>& v, const std::string& s, double f, const Request& req);
 
