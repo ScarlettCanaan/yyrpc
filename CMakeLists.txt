@@ -1,0 +1,11 @@
+add_subdirectory(src)
+SET_COMMON_TARGET_PROPERTIES(yyrpc)
+
+add_subdirectory(client_test)
+SET_COMMON_TARGET_PROPERTIES(yyrpc_client_test)
+
+add_subdirectory(server_test)
+SET_COMMON_TARGET_PROPERTIES(yyrpc_server_test)
+
+add_subdirectory(name_center)
+SET_COMMON_TARGET_PROPERTIES(yyrpc_name_center)
