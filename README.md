@@ -48,6 +48,6 @@ make install
 	- 使用`InitRPC(const char* cfgFile)`加载RPC配置文件
 	- 使用`RunRpc()`启动RPC服务
 	- 直接调用IDL文件所注册的方法，向server端发起远程过程调用
-	- 直接调用方法会返回一个`AsyncResult`，用户可在需要的时刻调用`wait()`等待RPC返回结果，或者调用`then<>(std::function callback)`注册匿名方法，在RPC返回结果时回调(其实只是同步调用，因为现在还不能支持多线程)
+	- 直接调用方法会返回一个`AsyncResult`，用户可在需要的时刻调用`wait()`等待RPC返回结果，或者调用`then<>(std::function callback)`注册匿名方法，在RPC返回结果时回调(***NOTE：其实只是同步调用，因为现在还不能支持多线程***)
 
 
