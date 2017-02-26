@@ -2,25 +2,36 @@
 #define YYRPC_LISTENPOINT_MANAGER_H_
 
 #include <memory>
-#include "listenpoint.h"
 #include <list>
 #include <unordered_map>
+#include "transport/transport.h"
+
+class ListenPoint;
+
+struct ListenPointWrapper
+{
+public:
+  ListenPointWrapper(){}
+  ListenPointWrapper(const std::shared_ptr<ListenPoint>& ep) : endpoint(ep) {}
+public:
+  operator bool() const { return endpoint.get() != 0; }
+  std::shared_ptr<ListenPoint> endpoint;
+};
 
 class ListenPointManager
 {
 public:
   static ListenPointManager& GetInstance();
 public:
-  std::shared_ptr<ListenPoint> Create(const std::string& ip, int32_t port, TransportProtocol protocal);
-  bool RegisterApi(const std::string& api, const std::shared_ptr<ListenPoint>& listenpoint);
+  ListenPointWrapper CreateListenPoint(const std::string& ip, int32_t port, TransportProtocol protocal);
 private:
-  std::shared_ptr<ListenPoint> CreateTcpListenPoint(const std::string& ip, int32_t port);
+  ListenPointWrapper CreateTcpListenPoint(const std::string& ip, int32_t port);
 private:
   ListenPointManager();
   ~ListenPointManager();
 private:
   std::list<std::shared_ptr<ListenPoint>> m_listenPoints;
-  std::unordered_map<std::string, std::shared_ptr<ListenPoint>> m_apiToListenPoint;
+  mutable std::mutex m_endpointMutex;
 };
 
 #endif  //! #ifndef YYRPC_LISTENPOINT_MANAGER_H_

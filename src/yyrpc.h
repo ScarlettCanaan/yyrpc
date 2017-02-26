@@ -6,12 +6,11 @@
 #include "type_traits/function_traits.h"
 #include <memory>
 
-class EndPoint;
+bool InitRpc(const char* cfgFile);
+bool RunRpc();
+bool UnInitRpc();
 
-typedef void (*OnRpcInited)(bool bSucc);
-
-bool InitRpc(const char* cfgFile, OnRpcInited callback);
-const std::shared_ptr<EndPoint>& QueryEndPoint(const std::string& api);
-const std::shared_ptr<EndPoint>& CreateEndPoint(const std::string& ip, int32_t port, TransportProtocol protocal, EndPointFlag flag = EPF_DEFAULT);
+EndPointWrapper QueryEndPoint(const std::string& api);
+EndPointWrapper CreateEndPoint(const std::string& ip, int32_t port, TransportProtocol protocal);
 
 #endif  //! #ifndef YY_RPC_H_

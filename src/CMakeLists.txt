@@ -43,6 +43,7 @@ set(SRC_GRP_TRANSPORT
 set(LIBRARY_SRCS
   yyrpc.h
   yyrpc.cpp
+  error_def.h
   method.h
   property.h
   serialization.h

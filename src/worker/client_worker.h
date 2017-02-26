@@ -5,7 +5,7 @@
 #include <memory>
 #include "util/thread_safe_list.h"
 
-struct CallPacket;
+class IAsyncResult;
 
 class ClientWorker : public ThreadWorker
 {
@@ -23,12 +23,12 @@ public:
 
   int _OnIdle(uv_idle_t *handle);
 public:
-  int QueueTask(const std::shared_ptr<CallPacket>& task);
+  int QueueTask(const std::shared_ptr<IAsyncResult>& task);
 private:
-  int DoTask(const std::shared_ptr<CallPacket>& task);
+  int DoTask(const std::shared_ptr<IAsyncResult>& task);
 private:
   uv_idle_t m_idler;
-  ThreadSafeList<std::shared_ptr<CallPacket>> m_taskList;
+  ThreadSafeList<std::shared_ptr<IAsyncResult>> m_taskList;
 };
 
 #endif  //! #ifndef __CLIENT_WORKER_H_

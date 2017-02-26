@@ -4,8 +4,10 @@
 #include <assert.h>
 #include "../proto/common_api.h"
 #include "msgpack.hpp"
+#include "listenpoint/rpc_client_accept.h"
 
-RpcTcpServerTransport::RpcTcpServerTransport()
+RpcTcpServerTransport::RpcTcpServerTransport(RpcClientAccept* accptor)
+  :m_accptor(accptor)
 {
   memset(m_procFunc, 0, sizeof(ProcFun) * YYRPC_PROTOCAL_MAX);
   m_procFunc[YYRPC_PROTOCAL_CALL] = &RpcTcpServerTransport::ProcessCall;
@@ -30,25 +32,21 @@ int RpcTcpServerTransport::ProcessCall(const Packet* rawPacket)
 {
   std::string s(rawPacket->getBodyData(), rawPacket->getBodyLength());
 
-  msgpack::unpacker unp;
-  unp.reserve_buffer(s.size());
+  std::shared_ptr<msgpack::unpacker> unp = std::make_shared<msgpack::unpacker>();
+  unp->reserve_buffer(s.size());
   std::stringstream input(s);
-  std::size_t actual_read_size = input.readsome(unp.buffer(), s.size());
+  std::size_t actual_read_size = input.readsome(unp->buffer(), s.size());
   if (actual_read_size != s.size())
     return -1;
 
-  unp.buffer_consumed(actual_read_size);
+  unp->buffer_consumed(actual_read_size);
 
   int32_t session_id = 0;
   std::string method_name;
-  if (!unserialization_header(unp, session_id, method_name))
+  if (!unserialization_header(*unp, session_id, method_name))
     return -1;
 
-  const std::shared_ptr<ICallback>& impl = CalleeManager::GetInstance().GetImpl(method_name);
-  if (!impl)
-    return -1;
-
-  if (!impl->Invork(unp))
+  if (!CalleeManager::GetInstance().OnCall(shared_from_this(), session_id, method_name, unp))
     return -1;
 
   return 0;
@@ -64,8 +62,8 @@ int RpcTcpServerTransport::OnRequireClose(int reason)
     SocketDisconnectMessage close;
     close.message_id = reason;
     std::stringstream s;
-    if (serialization(s, close))
-      Send(YYRPC_PROTOCAL_DISCONNECT, s);
+    if (serialization_result_header(s, 0, "", 0))
+      SendResult(s);
   }
 
   return 0;
@@ -73,6 +71,11 @@ int RpcTcpServerTransport::OnRequireClose(int reason)
 
 int RpcTcpServerTransport::OnAfterClose()
 {
+  m_accptor->UnRegisterTransport(shared_from_this());
   return 0;
 }
 
+bool RpcTcpServerTransport::SendResult(std::stringstream& s)
+{
+  return m_accptor->QueueSend(shared_from_this(), s);
+}

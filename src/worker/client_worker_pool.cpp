@@ -47,7 +47,7 @@ int ClientWorkerPool::UnInit()
   return 0;
 }
 
-int ClientWorkerPool::QueuePacket(size_t groupId, const std::shared_ptr<CallPacket>& task)
+int ClientWorkerPool::QueuePacket(size_t groupId, const std::shared_ptr<IAsyncResult>& task)
 {
   if (m_workers.empty())
     return -1;

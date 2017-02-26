@@ -1,5 +1,6 @@
 #include "server_worker.h"
 #include "util/util.h"
+#include "callee_manager.h"
 
 ServerWorker::ServerWorker()
 {
@@ -22,7 +23,7 @@ int ServerWorker::UnInit()
 {
   Stop();
 
-  std::shared_ptr<CallPacket> null;
+  std::shared_ptr<CalleePacket> null;
   QueueTask(null);
 
   Join();
@@ -68,10 +69,10 @@ int ServerWorker::_OnClose(uv_handle_t* handle)
 
 int ServerWorker::_OnIdle(uv_idle_t *handle)
 {
-  std::list<std::shared_ptr<CallPacket>> clone_request;
+  std::list<std::shared_ptr<CalleePacket>> clone_request;
   m_taskList.clone(clone_request);
 
-  std::list<std::shared_ptr<CallPacket>> retry_request;
+  std::list<std::shared_ptr<CalleePacket>> retry_request;
 
   auto it = clone_request.begin();
   for (; it != clone_request.end(); ++it)
@@ -84,26 +85,21 @@ int ServerWorker::_OnIdle(uv_idle_t *handle)
   for (; retry_it != retry_request.rend(); ++retry_it)
     m_taskList.push_front(*retry_it);
 
-  m_taskList.try_wait(std::chrono::milliseconds(50));
+  m_taskList.try_wait(std::chrono::milliseconds(60));
   return 0;
 }
 
-int ServerWorker::QueueTask(const std::shared_ptr<CallPacket>& task)
+int ServerWorker::QueueTask(const std::shared_ptr<CalleePacket>& task)
 {
   m_taskList.push_back(task);
   return 0;
 }
 
-int ServerWorker::DoTask(const std::shared_ptr<CallPacket>& task)
+int ServerWorker::DoTask(const std::shared_ptr<CalleePacket>& task)
 {
   if (!task)
     return 0;
 
-  //if (task->m_endpoint->GetChannel()->GetConnectStatus() != CS_CONNECTED)
-  //{
-  //  return -1;
-  //}
-
-  //task->m_endpoint.SendPacket();
+  task->run_impl();
   return 0;
 }

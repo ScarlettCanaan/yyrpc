@@ -1,4 +1,5 @@
 #include "listenpoint_manager.h"
+#include "listenpoint.h"
 
 ListenPointManager& ListenPointManager::GetInstance()
 {
@@ -16,26 +17,18 @@ ListenPointManager::~ListenPointManager()
 
 }
 
-std::shared_ptr<ListenPoint> ListenPointManager::Create(const std::string& ip, int32_t port, TransportProtocol protocal)
+ListenPointWrapper ListenPointManager::CreateListenPoint(const std::string& ip, int32_t port, TransportProtocol protocal)
 {
   static std::shared_ptr<ListenPoint> null;
 
+  std::lock_guard<std::mutex> l(m_endpointMutex);
   if (protocal == TP_TCP)
     return CreateTcpListenPoint(ip, port);
 
   return null;
 }
 
-bool ListenPointManager::RegisterApi(const std::string& api, const std::shared_ptr<ListenPoint>& listenpoint)
-{
-  if (m_apiToListenPoint.find(api) != m_apiToListenPoint.end())
-    return false;
-
-  m_apiToListenPoint[api] = listenpoint;
-  return true;
-}
-
-std::shared_ptr<ListenPoint> ListenPointManager::CreateTcpListenPoint(const std::string& ip, int32_t port)
+ListenPointWrapper ListenPointManager::CreateTcpListenPoint(const std::string& ip, int32_t port)
 {
   auto it = m_listenPoints.begin();
   for (; it != m_listenPoints.end(); ++it)
@@ -44,7 +37,7 @@ std::shared_ptr<ListenPoint> ListenPointManager::CreateTcpListenPoint(const std:
       return *it;
   }
 
-  std::shared_ptr<ListenPoint> p(new ListenPoint(ip, port, TP_TCP));
+  std::shared_ptr<ListenPoint> p(new TcpListenPoint(ip, port));
   p->Init();
   m_listenPoints.push_back(p);
   return p;

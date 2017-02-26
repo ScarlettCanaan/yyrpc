@@ -1,5 +1,6 @@
 #include "client_worker.h"
 #include "util/util.h"
+#include "async_result.h"
 
 ClientWorker::ClientWorker()
 {
@@ -22,7 +23,7 @@ int ClientWorker::UnInit()
 {
   Stop();
 
-  std::shared_ptr<CallPacket> null;
+  std::shared_ptr<IAsyncResult> null;
   QueueTask(null);
 
   Join();
@@ -68,10 +69,10 @@ int ClientWorker::_OnClose(uv_handle_t* handle)
 
 int ClientWorker::_OnIdle(uv_idle_t *handle)
 {
-  std::list<std::shared_ptr<CallPacket>> clone_request;
+  std::list<std::shared_ptr<IAsyncResult>> clone_request;
   m_taskList.clone(clone_request);
 
-  std::list<std::shared_ptr<CallPacket>> retry_request;
+  std::list<std::shared_ptr<IAsyncResult>> retry_request;
 
   auto it = clone_request.begin();
   for (; it != clone_request.end(); ++it)
@@ -88,22 +89,18 @@ int ClientWorker::_OnIdle(uv_idle_t *handle)
   return 0;
 }
 
-int ClientWorker::QueueTask(const std::shared_ptr<CallPacket>& task)
+int ClientWorker::QueueTask(const std::shared_ptr<IAsyncResult>& task)
 {
   m_taskList.push_back(task);
   return 0;
 }
 
-int ClientWorker::DoTask(const std::shared_ptr<CallPacket>& task)
+int ClientWorker::DoTask(const std::shared_ptr<IAsyncResult>& task)
 {
   if (!task)
     return 0;
 
-  //if (task->m_endpoint->GetChannel()->GetConnectStatus() != CS_CONNECTED)
-  //{
-  //  return -1;
-  //}
+  task->run_callback();
 
-  //task->m_endpoint.SendPacket();
   return 0;
 }

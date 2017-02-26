@@ -3,6 +3,11 @@
 #include "endpoint/endpoint_manager.h"
 #include "ini/ini.hpp"
 #include "listenpoint/listenpoint_manager.h"
+#include "listenpoint/listenpoint.h"
+#include "worker/server_worker_pool.h"
+#include "worker/client_worker_pool.h"
+
+static bool yyrpc_inited = false;
 
 bool InitClient(INI::Level& level)
 {
@@ -27,6 +32,10 @@ bool InitClient(INI::Level& level)
   if (!level.getstring("app_token", app_token))
     return false;
 
+  EndPointWrapper wrapper = EndPointManager::GetInstance().CreateEndPoint(name_center_ip, name_center_port, TP_TCP);
+  if (!wrapper)
+    return false;
+
   return true;
 }
 
@@ -41,11 +50,21 @@ bool InitServer(INI::Level& level)
   if (!level.getinteger("protacal", protacal))
     return false;
 
-  std::shared_ptr<ListenPoint> p = ListenPointManager::GetInstance().Create("0.0.0.0", listen_port, (TransportProtocol)protacal);
-  return p.get() != 0;
+  ListenPointWrapper wrapper = ListenPointManager::GetInstance().CreateListenPoint("0.0.0.0", listen_port, (TransportProtocol)protacal);
+  if (!wrapper)
+    return false;
+
+  int try_count = 0;
+  while (wrapper.endpoint->GetStatus() == LPS_INIT && try_count < 3)
+  {
+    ++try_count;
+    uv_sleep(100);
+  }
+
+  return wrapper.endpoint->GetStatus() == LPS_LISTEN_SUCC;
 }
 
-bool InitRpc(const char* cfgFile, OnRpcInited callback)
+bool InitRpc(const char* cfgFile)
 {
   INI::Parser parse(cfgFile);
   INI::Level::section_map_t& sections = parse.top().sections;
@@ -54,15 +73,53 @@ bool InitRpc(const char* cfgFile, OnRpcInited callback)
   if (!InitClient(level))
     return false;
 
-  return InitServer(level);
+  if (!InitServer(level))
+    return false;
+  
+  int32_t client_worker_num = 0;
+  level.getinteger("client_worker_num", client_worker_num);
+  if (client_worker_num < 1)
+    client_worker_num = 1;
+  ClientWorkerPool::GetInstance().Init(client_worker_num);
+
+  int32_t server_worker_num = 0;
+  level.getinteger("server_worker_num", server_worker_num);
+  if (server_worker_num < 1)
+    server_worker_num = 1;
+  ServerWorkerPool::GetInstance().Init(server_worker_num);
+
+  yyrpc_inited = true;
+  return true;
 }
 
-const std::shared_ptr<EndPoint>& QueryEndPoint(const std::string& api)
+bool RunRpc()
+{
+  if (!yyrpc_inited)
+    return false;
+
+  CallerManager::GetInstance().PumpMessage();
+  CalleeManager::GetInstance().PumpMessage();
+
+  return true;
+}
+
+bool UnInitRpc()
+{
+  if (!yyrpc_inited)
+    return false;
+
+  ClientWorkerPool::GetInstance().UnInit();
+  ServerWorkerPool::GetInstance().UnInit();
+  yyrpc_inited = false;
+  return true;
+}
+
+EndPointWrapper QueryEndPoint(const std::string& api)
 {
   return EndPointManager::GetInstance().QueryEndPoint(api);
 }
 
-const std::shared_ptr<EndPoint>& CreateEndPoint(const std::string& ip, int32_t port, TransportProtocol protocal, EndPointFlag flag)
+EndPointWrapper CreateEndPoint(const std::string& ip, int32_t port, TransportProtocol protocal)
 {
-  return EndPointManager::GetInstance().CreateEndPoint(ip, port, protocal, flag);
+  return EndPointManager::GetInstance().CreateEndPoint(ip, port, protocal);
 }

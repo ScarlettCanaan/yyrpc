@@ -47,7 +47,7 @@ int ServerWorkerPool::UnInit()
   return 0;
 }
 
-int ServerWorkerPool::QueuePacket(size_t groupId, const std::shared_ptr<CallPacket>& task)
+int ServerWorkerPool::QueuePacket(size_t groupId, const std::shared_ptr<CalleePacket>& task)
 {
   if (m_workers.empty())
     return -1;

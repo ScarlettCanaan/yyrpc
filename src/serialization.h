@@ -45,8 +45,7 @@ typename std::enable_if<std::is_array<T>::value, bool>::type serialization_array
   using first_dimension = typename std::remove_extent<T>::type;
   using deepest_dimension = typename std::remove_all_extents<T>::type;
   static_assert(std::is_same<first_dimension, deepest_dimension>::value, "RPC_CALL_ERROR: array only support one-dimensional!");
-  int array_size = std::extent<T>::value;
-  for (int i = 0; i < array_size; ++i)
+  for (int i = 0; i < std::extent<T>::value; ++i)
   {
     using raw_type = typename std::remove_cv<typename std::remove_reference<first_dimension>::type>::type;
     serialization<raw_type>(s, t[i]);
@@ -114,10 +113,18 @@ typename std::enable_if<!is_container<T>::value, bool>::type serialization(std::
   return serialization_model(s, t);
 }
 
-inline bool serialization_header(std::stringstream& s, int32_t session_id, std::string& method_name)
+inline bool serialization_call_header(std::stringstream& s, int32_t session_id, const std::string& method_name)
 {
   msgpack::pack(s, session_id);
   msgpack::pack(s, method_name);
+  return true;
+}
+
+inline bool serialization_result_header(std::stringstream& s, int32_t session_id, const std::string& method_name, int32_t error_id)
+{
+  msgpack::pack(s, session_id);
+  msgpack::pack(s, method_name);
+  msgpack::pack(s, error_id);
   return true;
 }
 

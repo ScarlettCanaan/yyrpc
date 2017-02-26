@@ -5,7 +5,7 @@
 #include <memory>
 
 class ClientWorker;
-struct CallPacket;
+class IAsyncResult;
 
 class ClientWorkerPool
 {
@@ -15,7 +15,7 @@ public:
   int Init(size_t worker_num);
   int UnInit();
 public:
-  int QueuePacket(size_t groupId, const std::shared_ptr<CallPacket>& task);
+  int QueuePacket(size_t groupId, const std::shared_ptr<IAsyncResult>& task);
 private:
   std::vector<std::shared_ptr<ClientWorker>> m_workers;
 private:

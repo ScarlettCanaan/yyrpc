@@ -2,14 +2,9 @@
 #include "worker/client_worker_pool.h"
 #include "util/util.h"
 #include <iostream>
-
-CallPacket::CallPacket(const std::shared_ptr<EndPoint>& endpoint, uint32_t session_id, std::stringstream& s)
-{
-  m_endpoint = endpoint;
-  m_sessionId = session_id;
-  m_data = s.str();
-  GetTimeSecond(&m_callTime);
-}
+#include "error_def.h"
+#include "transport/rpc_tcp_client_transport.h"
+#include "async_result.h"
 
 CallerManager& CallerManager::GetInstance()
 {
@@ -25,7 +20,30 @@ CallerManager::~CallerManager()
 {
 }
 
-void CallerManager::QueuePacket(const std::shared_ptr<CallPacket>& pPacket)
+bool CallerManager::OnResult(std::thread::id id, std::shared_ptr<IAsyncResult> result)
 {
-  ClientWorkerPool::GetInstance().QueuePacket(0, pPacket);
+  if (id != std::thread::id())
+  {
+    std::lock_guard<std::mutex> l(m_resultMutex);
+    m_specThreadResult[id].insert(result);
+    return true;
+  }
+
+  ClientWorkerPool::GetInstance().QueuePacket((int64_t)result.get() & 0xFF, result);
+  return true;
+}
+
+bool CallerManager::PumpMessage()
+{
+  std::set<std::shared_ptr<IAsyncResult>> cloneSet;
+  {
+    std::lock_guard<std::mutex> l(m_resultMutex);
+    cloneSet = m_specThreadResult[std::this_thread::get_id()];
+    m_specThreadResult[std::this_thread::get_id()].clear();
+  }
+
+  for (auto it : cloneSet)
+    it->run_callback();
+
+  return !cloneSet.empty();
 }

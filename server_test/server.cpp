@@ -6,26 +6,27 @@
 
 int server_callee()
 {
-  SimpleAPi::Hello.bind([]() -> bool
+  SimpleAPi::Hello.bind([]()
   {
     std::cout << "Hello World!" << std::endl;
-    return true;
   });
 
-  SimpleAPi::Sum.bind([](int a, int b) -> bool
+  SimpleAPi::Sum.bind<any_thread>([](int a, int b) -> int
   {
-    std::cout << "sum:" << a + b << std::endl;
-    return true;
+    //std::cout << "sum:" << a + b << std::endl;
+    return a + b;
   });
 
   TestAPi::TestMethod.bind([](
     const std::vector<int>& v,
     const std::string& s,
     double f,
-    const Request& r) -> bool
+    const Request& r) -> Response
   {
     std::cout << f << std::endl;
-    return true;
+    Response rsp;
+    rsp.memberMap[1] = "youjing";
+    return rsp;
   });
 
   return 0;

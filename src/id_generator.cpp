@@ -1,12 +1,12 @@
 #include "id_generator.h"
 
 #ifdef WIN32
-__declspec(thread) unsigned int session_id = 1;
+__declspec(thread) uint64_t session_id = 1;
 #else
-thread_local unsigned int session_id = 1;
+thread_local uint64_t session_id = 1;
 #endif
 
-uint32_t get_sessionid()
+uint64_t get_sessionid()
 {
   return ++session_id;
 }

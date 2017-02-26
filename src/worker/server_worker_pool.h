@@ -5,7 +5,7 @@
 #include <memory>
 
 class ServerWorker;
-struct CallPacket;
+struct CalleePacket;
 
 class ServerWorkerPool
 {
@@ -15,7 +15,7 @@ public:
   int Init(size_t worker_num);
   int UnInit();
 public:
-  int QueuePacket(size_t groupId, const std::shared_ptr<CallPacket>& task);
+  int QueuePacket(size_t groupId, const std::shared_ptr<CalleePacket>& task);
 private:
   std::vector<std::shared_ptr<ServerWorker>> m_workers;
 private:

@@ -12,6 +12,7 @@
 #include "callee_manager.h"
 #include "endpoint/endpoint_manager.h"
 #include "id_generator.h"
+#include "endpoint/endpoint.h"
 
 class EndPoint;
 
@@ -84,7 +85,7 @@ bool ParamIterator < Func, 0 >::unpack(msgpack::unpacker& unp, std::tuple<Args .
 }
 
 template<typename Func, typename... Args>
-bool CheckAndSerialization(const std::string& name, std::stringstream& s, Args ...args)
+bool CheckAndSerialization(std::stringstream& s, Args ...args)
 {
   using traits = function_traits < Func > ;
   static_assert(sizeof...(args) == traits::nargs, "RPC_CALL_ERROR: argument count mismatch.");
@@ -92,7 +93,7 @@ bool CheckAndSerialization(const std::string& name, std::stringstream& s, Args .
 }
 
 template<typename Func>
-bool CheckAndSerialization(const std::string& name, std::stringstream& s)
+bool CheckAndSerialization(std::stringstream& s)
 {
   using traits = function_traits < Func > ;
   static_assert(traits::nargs == 0, "RPC_CALL_ERROR: argument count mismatch.");
@@ -103,11 +104,6 @@ template<typename... Args>
 bool CheckAndUnSerialization(msgpack::unpacker& unp, std::tuple<Args ...>& args)
 {
   return ParamIterator<void(Args...)>::unpack(unp, args);
-}
-
-inline bool CheckAndUnSerialization(msgpack::unpacker& unp)
-{
-  return true;
 }
 
 template <typename Func>
@@ -129,54 +125,78 @@ struct TRpcMethod < R(Args...) >
   TRpcMethod(const std::string& name, const std::string& ns) 
   { fullname_ = ns + name; }
 
+public:
   template<typename ... Args2>
-  std::shared_ptr<AsyncResult<R>> operator()(Args2... args) const;
+  AsyncResultWrapper<R> operator()(Args2... args) const;
 
   template<typename ... Args2>
-  std::shared_ptr<AsyncResult<R>> operator()(const std::shared_ptr<EndPoint>& endpoint, Args2... args) const;
+  AsyncResultWrapper<R> operator()(const EndPointWrapper& wrapper, Args2... args) const;
 
-  std::shared_ptr<AsyncResult<R>> operator()() const;
+  AsyncResultWrapper<R> operator()() const;
 
-  bool bind(std::function<bool(Args...)> func) const;
+  AsyncResultWrapper<R> operator()(const EndPointWrapper& wrapper) const;
+
+  template <typename T = this_thread>
+  bool bind(std::function<R(Args...)> func) const;
 private:
   std::string	fullname_;
 };
 
 template <typename R, typename ... Args>
 template<typename ... Args2>
-std::shared_ptr<AsyncResult<R>> TRpcMethod < R(Args...) >::operator()(Args2... args) const
+AsyncResultWrapper<R> TRpcMethod < R(Args...) >::operator()(Args2... args) const
 {
+  auto wrapper = EndPointManager::GetInstance().QueryEndPoint(fullname_);
+  if (!wrapper)
+    return AsyncResultWrapper<R>();
   std::stringstream s;
-  CheckAndSerialization<R(Args...)>(fullname_, s, args...);
-  auto endpoint = EndPointManager::GetInstance().QueryEndPoint(fullname_);
-  uint32_t session_id = get_sessionid();
-  return CallerManager::GetInstance().Call<R>(endpoint, session_id, s);
+  uint64_t session_id = get_sessionid();
+  serialization_call_header(s, session_id, fullname_);
+  CheckAndSerialization<R(Args...)>(s, args...);
+  return wrapper.endpoint->Call<R>(session_id, s);
 }
 
 template <typename R, typename ... Args>
 template<typename ... Args2>
-std::shared_ptr<AsyncResult<R>> TRpcMethod < R(Args...) >::operator()(const std::shared_ptr<EndPoint>& endpoint, Args2... args) const
+AsyncResultWrapper<R> TRpcMethod < R(Args...) >::operator()(const EndPointWrapper& wrapper, Args2... args) const
 {
+  if (!wrapper)
+    return AsyncResultWrapper<R>();
   std::stringstream s;
-  CheckAndSerialization<R(Args...)>(fullname_, s, args...);
-  uint32_t session_id = get_sessionid();
-  return CallerManager::GetInstance().Call<R>(endpoint, session_id, s);
+  uint64_t session_id = get_sessionid();
+  serialization_call_header(s, session_id, fullname_);
+  CheckAndSerialization<R(Args...)>(s, args...);
+  return wrapper.endpoint->Call<R>(session_id, s);
 }
 
 template <typename R, typename ... Args>
-std::shared_ptr<AsyncResult<R>> TRpcMethod < R(Args...) >::operator()() const
+AsyncResultWrapper<R> TRpcMethod < R(Args...) >::operator()() const
 {
+  auto wrapper = EndPointManager::GetInstance().QueryEndPoint(fullname_);
+  if (!wrapper)
+    return AsyncResultWrapper<R>();
   std::stringstream s;
-  CheckAndSerialization<R(void)>(fullname_, s);
-  auto endpoint = EndPointManager::GetInstance().QueryEndPoint(fullname_);
-  uint32_t session_id = get_sessionid();
-  return CallerManager::GetInstance().Call<R>(endpoint, session_id, s);
+  uint64_t session_id = get_sessionid();
+  serialization_call_header(s, session_id, fullname_);
+  return wrapper.endpoint->Call<R>(session_id, s);
 }
 
 template <typename R, typename ... Args>
-bool TRpcMethod < R(Args...) >::bind(std::function<bool(Args...)> func) const
+AsyncResultWrapper<R> TRpcMethod < R(Args...) >::operator()(const EndPointWrapper& wrapper) const
 {
-  return CalleeManager::GetInstance().BindApi(fullname_, func);
+  if (!wrapper)
+    return AsyncResultWrapper<R>();
+  std::stringstream s;
+  uint64_t session_id = get_sessionid();
+  serialization_call_header(s, session_id, fullname_);
+  return wrapper.endpoint->Call<R>(session_id, s);
+}
+
+template <typename R, typename ... Args>
+template <typename T>
+bool TRpcMethod < R(Args...) >::bind(std::function<R(Args...)> func) const
+{
+  return CalleeManager::GetInstance().BindApi(fullname_, func, std::is_same<T, this_thread>::value);
 }
 
 #ifdef WIN32

@@ -3,10 +3,9 @@
 
 RpcTcpClientTransport::RpcTcpClientTransport()
 {
-  /*memset(m_procFunc, 0, sizeof(ProcFun) * C2Q_MAX);
-  m_procFunc[Q2C_UPDATE] = &RpcTcpClientTransport::ProcessQ2cUpdate;
-  m_procFunc[Q2C_PASS] = &RpcTcpClientTransport::ProcessQ2cPass;
-  m_procFunc[Q2C_CLOSE_MSG] = &RpcTcpClientTransport::ProcessQ2cClose;*/
+  memset(m_procFunc, 0, sizeof(ProcFun) * YYRPC_PROTOCAL_MAX);
+  m_procFunc[YYRPC_PROTOCAL_RESULT] = &RpcTcpClientTransport::ProcessResult;
+  m_procFunc[YYRPC_PROTOCAL_EVENT] = &RpcTcpClientTransport::ProcessEvent;
 }
 
 RpcTcpClientTransport::~RpcTcpClientTransport()
@@ -24,19 +23,12 @@ int RpcTcpClientTransport::OnRecvPacket(const Packet* rawPacket)
   return -1;
 }
 
-int RpcTcpClientTransport::OnConnected(bool bSucc)
+int RpcTcpClientTransport::ProcessResult(const Packet* rawPacket)
 {
-  /*char buffer[128] = { 0 };
+  return OnProcessResult(rawPacket);
+}
 
-  c2q_hello hello;
-  hello.set_id(m_uid);
-  hello.set_session("8234567890");
-  hello.set_gatewayid(1);
-  if (!hello.SerializeToArray(buffer, 128))
-  return -1;
-
-  int r;
-  r = Send(C2Q_HELLO, (const char*)buffer, hello.ByteSize());
-  UV_CHECK_RET_1(send, r);*/
-  return 0;
+int RpcTcpClientTransport::ProcessEvent(const Packet* rawPacket)
+{
+  return OnProcessEvent(rawPacket);
 }

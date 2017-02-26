@@ -33,8 +33,7 @@ typename std::enable_if<std::is_array<T>::value, bool>::type unserialization_arr
   using first_dimension = typename std::remove_extent<T>::type;
   using deepest_dimension = typename std::remove_all_extents<T>::type;
   static_assert(std::is_same<first_dimension, deepest_dimension>::value, "RPC_CALL_ERROR: array only support one-dimensional!");
-  int array_size = std::extent<T>::value;
-  for (int i = 0; i < array_size; ++i)
+  for (int i = 0; i < std::extent<T>::value; ++i)
   {
     using raw_type = typename std::remove_cv<typename std::remove_reference<first_dimension>::type>::type;
     unserialization<raw_type>(unp, t[i]);

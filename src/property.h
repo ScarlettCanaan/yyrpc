@@ -11,7 +11,6 @@
 #include <tuple>
 
 #ifdef WIN32
-
 template <typename T>
 class has_meta
 {
@@ -23,21 +22,6 @@ public:
 };
 
 template<typename T> struct is_model : std::integral_constant < bool, has_meta<T>::value > {};
-
-template<typename T>
-static inline auto apply(T const & args)->decltype(args)
-{
-  return args;
-}
-
-template<typename T, typename T1, typename... Args>
-static inline auto apply(T const & t, const T1& first, const Args&... args) ->decltype(apply(std::tuple_cat(t, std::make_tuple((typename std::remove_cv<T1>::type)first)), args...))
-{
-  return apply(std::tuple_cat(t, std::make_tuple((typename std::remove_cv<T1>::type)first)), args...);
-}
-
-#define YYRPC_PROPERTY(...) auto meta() -> decltype(apply(std::tuple<>(), __VA_ARGS__)) { return apply(std::tuple<>(), __VA_ARGS__); } \
-
 #else
 
 template <typename T>
@@ -52,20 +36,8 @@ public:
 
 template<typename T> struct is_model : std::integral_constant < bool, has_meta<T>::value > {};
 
-template<typename T>
-static inline auto apply(T const & args)
-{
-  return args;
-}
-
-template<typename T, typename T1, typename... Args>
-static inline auto apply(T const & t, const T1& first, const Args&... args)
-{
-  return apply(std::tuple_cat(t, std::make_tuple((typename std::remove_cv<T1>::type)first)), args...);
-}
-
-#define YYRPC_PROPERTY(...) auto meta() { return apply(std::tuple<>(), __VA_ARGS__); } \
-
 #endif
+
+#define YYRPC_PROPERTY(...) auto meta() -> decltype(std::tie(__VA_ARGS__)) { return std::tie(__VA_ARGS__); } \
 
 #endif  //! #ifndef YYRPC_PROPERTY_H_
