@@ -32,7 +32,7 @@ public:
   // ThreadWorker
   int _DoWork() override;
   int _OnAsync(uv_async_t* handle) override;
-  int _OnClose(uv_handle_t* handle) override;
+  int _OnDestory(uv_handle_t* handle) override;
 
 public:
   int _OnTimerLong(uv_timer_t *handle);
@@ -45,6 +45,7 @@ public:
 private:
   virtual int DoTask(const std::shared_ptr<CallerPacket>& task) = 0;
   int CheckCallTimeout();
+  bool CheckCallTimeout(int64_t cur_time, const std::shared_ptr<IAsyncResult>& result);
   int ReConnectIfNecessary();
 public:
   const std::string& GetIp() const { return m_ip; }
@@ -53,12 +54,15 @@ public:
   bool IsFinalFailed() const;
   void ResetFail();
 
-  virtual void OnClose() = 0;
+  virtual void OnDestory() = 0;
   virtual void CreateChannel() = 0;
-  virtual TransportProtocol GetProtocal() const = 0;
+  virtual TransportProtocol GetTransportProtocal() const = 0;
+
+  MethodProtocol GetMethodProtocal() const { return m_methodProtocal; }
 private:
   std::string m_ip;
   int32_t m_port;
+  MethodProtocol m_methodProtocal;
   uv_timer_t timer_long;
   std::mutex m_resultMutex;
 
@@ -71,7 +75,7 @@ private:
   int32_t  m_tryCount;
   int64_t  m_nextTryTime;
 private:
-  EndPoint(const std::string& ip, int32_t port);
+  EndPoint(const std::string& ip, int32_t port, MethodProtocol mProtocal);
   ~EndPoint();
   friend class TcpEndPoint;
 };
@@ -79,7 +83,10 @@ private:
 template<typename R>
 AsyncResultWrapper<R> EndPoint::Call(uint64_t session_id, std::stringstream& s)
 {
-  std::shared_ptr<AsyncResult<R>> pResult = std::make_shared<AsyncResult<R>>(session_id);
+  if (session_id == -1)
+    return AsyncResultWrapper <R>(YYRPC_ERROR_SERI_FAILED);
+
+  std::shared_ptr<AsyncResult<R>> pResult = std::make_shared<AsyncResult<R>>();
   {
     std::lock_guard<std::mutex> l(m_resultMutex);
     m_pendingResult[session_id] = pResult;
@@ -94,24 +101,29 @@ AsyncResultWrapper<R> EndPoint::Call(uint64_t session_id, std::stringstream& s)
 
 inline AsyncResultWrapper<void> EndPoint::Call(uint64_t session_id, std::stringstream& s)
 {
+  if (session_id == -1)
+    return AsyncResultWrapper < void >(YYRPC_ERROR_SERI_FAILED);
+
   std::shared_ptr<CallerPacket> pPacket = std::make_shared<CallerPacket>(session_id, s);
   m_taskList.push_back(pPacket);
   uv_async_send(m_asyncHandle);
-  return AsyncResultWrapper < void > ();
+  return AsyncResultWrapper < void >(YYRPC_ERROR_SUCESS);
 }
 
 class TcpEndPoint : public EndPoint, public RpcTcpClientTransport
 {
 private:
-  TcpEndPoint(const std::string& ip, int32_t port) : EndPoint(ip, port) {}
+  TcpEndPoint(const std::string& ip, int32_t port, MethodProtocol mProtocal) : EndPoint(ip, port, mProtocal), RpcTcpClientTransport(mProtocal) {}
 private:
-  TransportProtocol GetProtocal() const override { return TP_TCP; }
-  void OnClose() override;
+  TransportProtocol GetTransportProtocal() const override { return TP_TCP; }
+  void OnDestory() override;
   void CreateChannel() override;
 
-  virtual int OnProcessResult(const Packet* rawPacket) override;
-  virtual int OnProcessEvent(const Packet* rawPacket) override;
+  virtual int OnProcessResult(const char* data, int32_t len) override;
 
+  int OnCallResult(int32_t session_id, int32_t error_id, msgpack::unpacker& unp);
+  int OnFireEvent(int32_t session_id, int32_t error_id, msgpack::unpacker& unp);
+  
   virtual int OnConnected(bool bSucc) override;
   virtual int OnAfterClose() override;
 

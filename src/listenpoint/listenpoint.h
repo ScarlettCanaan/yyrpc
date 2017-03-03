@@ -24,32 +24,35 @@ public:
   // ThreadWorker
   int _DoWork() override;
   int _OnAsync(uv_async_t* handle) override;
-  int _OnClose(uv_handle_t* handle) override;
+  int _OnDestory(uv_handle_t* handle) override;
 public:
   const std::string& GetIp() const { return m_ip; }
   int32_t GetPort() const { return m_port; }
   ListenPointStatus GetStatus() const { return m_status; }
 
-  virtual void OnClose() = 0;
-  virtual int BindListen() = 0;
+  virtual void OnDestory() = 0;
+  virtual int BindListen(MethodProtocol mProtocal) = 0;
   virtual TransportProtocol GetProtocal() const = 0;
+
+  MethodProtocol GetMethodProtocal() const { return m_methodProtocal; }
 private:
   std::string m_ip;
   int32_t m_port;
   ListenPointStatus m_status;
+  MethodProtocol m_methodProtocal;
 private:
-  ListenPoint(const std::string& ip, int32_t port);
+  ListenPoint(const std::string& ip, int32_t port, MethodProtocol mProtocal);
   friend class TcpListenPoint;
 };
 
 class TcpListenPoint : public ListenPoint
 {
 private:
-  TcpListenPoint(const std::string& ip, int32_t port) : ListenPoint(ip, port) {}
+  TcpListenPoint(const std::string& ip, int32_t port, MethodProtocol mProtocal) : ListenPoint(ip, port, mProtocal) {}
 private:
   TransportProtocol GetProtocal() const override { return TP_TCP; }
-  void OnClose() override;
-  int BindListen() override;
+  void OnDestory();
+  int BindListen(MethodProtocol mProtocal) override;
 private:
   std::shared_ptr<IAcceptor> m_acceptor;
   friend class ListenPointManager;

@@ -19,7 +19,7 @@ public:
   // ThreadWorker
   int _DoWork() override;
   int _OnAsync(uv_async_t* handle) override;
-  int _OnClose(uv_handle_t* handle) override;
+  int _OnDestory(uv_handle_t* handle) override;
 
   int _OnIdle(uv_idle_t *handle);
 public:

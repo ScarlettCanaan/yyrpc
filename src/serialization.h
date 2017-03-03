@@ -120,10 +120,10 @@ inline bool serialization_call_header(std::stringstream& s, int32_t session_id, 
   return true;
 }
 
-inline bool serialization_result_header(std::stringstream& s, int32_t session_id, const std::string& method_name, int32_t error_id)
+inline bool serialization_result_header(std::stringstream& s, const std::string& msgType, int32_t session_id, int32_t error_id)
 {
+  msgpack::pack(s, msgType);
   msgpack::pack(s, session_id);
-  msgpack::pack(s, method_name);
   msgpack::pack(s, error_id);
   return true;
 }

@@ -122,4 +122,22 @@ inline bool unserialization_header(msgpack::unpacker& unp, int32_t& session_id, 
   return true;
 }
 
+inline bool unserialization_result_header(msgpack::unpacker& unp, std::string& msgType, int32_t& session_id, int32_t& error_id)
+{
+  msgpack::object_handle o;
+  if (!unp.next(o))
+    return false;
+  msgType = o.get().as<std::string>();
+
+  if (!unp.next(o))
+    return false;
+  session_id = o.get().as<int32_t>();
+
+  if (!unp.next(o))
+    return false;
+  error_id = o.get().as<int32_t>();
+
+  return true;
+}
+
 #endif  //! #ifndef YYRPC_UNSERIALIZATION_H_

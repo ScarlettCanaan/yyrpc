@@ -5,6 +5,7 @@
 #include <list>
 #include <unordered_map>
 #include "transport/transport.h"
+#include "endpoint.h"
 
 class EndPoint;
 
@@ -14,7 +15,7 @@ public:
   EndPointWrapper() {}
   EndPointWrapper(const std::shared_ptr<EndPoint>& ep) : endpoint(ep) {}
 public:
-  operator bool() const { return endpoint.get() != 0; }
+  operator bool() const { return endpoint.get() != 0 && !endpoint->IsFinalFailed(); }
 public:
   std::shared_ptr<EndPoint> endpoint;
 };
@@ -24,11 +25,14 @@ class EndPointManager
 public:
   static EndPointManager& GetInstance();
 public:
+  int Init();
+  int UnInit();
+public:
   EndPointWrapper QueryEndPoint(const std::string& api) const;
-  EndPointWrapper CreateEndPoint(const std::string& ip, int32_t port, TransportProtocol protocal);
+  EndPointWrapper CreateEndPoint(const std::string& ip, int32_t port, TransportProtocol tProtocal, MethodProtocol mProtocal);
   bool RegisterApi(const std::string& api, const std::shared_ptr<EndPoint>& endpoint);
 private:
-  EndPointWrapper CreateTcpEndPoint(const std::string& ip, int32_t port);
+  EndPointWrapper CreateTcpEndPoint(const std::string& ip, int32_t port, MethodProtocol mProtocal);
 private:
   EndPointManager();
   ~EndPointManager();

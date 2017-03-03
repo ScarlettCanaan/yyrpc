@@ -12,7 +12,21 @@ CallerManager& CallerManager::GetInstance()
   return inst;
 }
 
+int CallerManager::Init(bool useFiber, size_t maxFiberNum)
+{
+  m_initThreadId = std::this_thread::get_id();
+  m_useFiber = useFiber;
+  m_maxFiberNum = maxFiberNum;
+  return 0;
+}
+
+int CallerManager::UnInit()
+{
+  return 0;
+}
+
 CallerManager::CallerManager()
+  : m_useFiber(false)
 {
 }
 
@@ -22,24 +36,37 @@ CallerManager::~CallerManager()
 
 bool CallerManager::OnResult(std::thread::id id, std::shared_ptr<IAsyncResult> result)
 {
-  if (id != std::thread::id())
+  if (m_useFiber)
   {
     std::lock_guard<std::mutex> l(m_resultMutex);
-    m_specThreadResult[id].insert(result);
-    return true;
+    m_specThreadResult[m_initThreadId].push_back(result);
   }
-
-  ClientWorkerPool::GetInstance().QueuePacket((int64_t)result.get() & 0xFF, result);
+  else if (id != std::thread::id())
+  {
+    std::lock_guard<std::mutex> l(m_resultMutex);
+    m_specThreadResult[id].push_back(result);
+  }
+  else
+  {
+    ClientWorkerPool::GetInstance().QueuePacket((int64_t)result.get() & 0xFF, result);
+  }
   return true;
 }
 
 bool CallerManager::PumpMessage()
 {
-  std::set<std::shared_ptr<IAsyncResult>> cloneSet;
+  if (m_useFiber && m_initThreadId != std::this_thread::get_id())
+  {
+    LOG(ERROR) << "fiber must be called on the init thread.";
+    return false;
+  }
+
+  std::thread::id id = std::this_thread::get_id();
+  std::list<std::shared_ptr<IAsyncResult>> cloneSet;
   {
     std::lock_guard<std::mutex> l(m_resultMutex);
-    cloneSet = m_specThreadResult[std::this_thread::get_id()];
-    m_specThreadResult[std::this_thread::get_id()].clear();
+    cloneSet = m_specThreadResult[id];
+    m_specThreadResult[id].clear();
   }
 
   for (auto it : cloneSet)
@@ -47,3 +74,41 @@ bool CallerManager::PumpMessage()
 
   return !cloneSet.empty();
 }
+
+static void* fiber_work_thread(void* arg)
+{
+  CallerManager* server = (CallerManager*)arg;
+  server->_OnFiberWork();
+
+  return NULL;
+}
+
+void CallerManager::_OnFiberWork()
+{
+  st_thread_t t = st_thread_self();
+  auto it = m_fiberThreadMap.find(t);
+  if (it == m_fiberThreadMap.end())
+  {
+    LOG(ERROR) << "fiber thread not exist.";
+    return;
+  }
+  it->second->func();
+  m_fiberThreadMap.erase(t);
+}
+
+int CallerManager::CreateFiber(const std::function<int(void)>& f)
+{
+  std::shared_ptr<FunctionWrapper> wrap = std::make_shared<FunctionWrapper>();
+  wrap->func = f;
+
+  st_thread_t t = st_thread_create(fiber_work_thread, this, 0, 0);
+  if (t == NULL)
+  {
+    LOG(ERROR) << "st_thread_create failed.";
+    return -1;
+  }
+
+  m_fiberThreadMap[t] = wrap;
+  return 0;
+}
+

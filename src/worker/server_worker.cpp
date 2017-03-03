@@ -61,7 +61,7 @@ int ServerWorker::_OnAsync(uv_async_t* handle)
   return 0;
 }
 
-int ServerWorker::_OnClose(uv_handle_t* handle)
+int ServerWorker::_OnDestory(uv_handle_t* handle)
 {
   uv_close((uv_handle_t*)&m_idler, NULL);
   return 0;
@@ -100,6 +100,8 @@ int ServerWorker::DoTask(const std::shared_ptr<CalleePacket>& task)
   if (!task)
     return 0;
 
-  task->run_impl();
+  if (!task->run_impl())
+    LOG(ERROR) << "task run failed, method_name:" << task->method_name << " sessionid: " << task->session_id;
+
   return 0;
 }

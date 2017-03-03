@@ -23,9 +23,12 @@ class ListenPointManager
 public:
   static ListenPointManager& GetInstance();
 public:
-  ListenPointWrapper CreateListenPoint(const std::string& ip, int32_t port, TransportProtocol protocal);
+  int Init();
+  int UnInit();
+public:
+  ListenPointWrapper CreateListenPoint(const std::string& ip, int32_t port, TransportProtocol protocal, MethodProtocol mProtocal);
 private:
-  ListenPointWrapper CreateTcpListenPoint(const std::string& ip, int32_t port);
+  ListenPointWrapper CreateTcpListenPoint(const std::string& ip, int32_t port, MethodProtocol mProtocal);
 private:
   ListenPointManager();
   ~ListenPointManager();

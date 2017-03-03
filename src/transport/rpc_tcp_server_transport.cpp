@@ -6,8 +6,8 @@
 #include "msgpack.hpp"
 #include "listenpoint/rpc_client_accept.h"
 
-RpcTcpServerTransport::RpcTcpServerTransport(RpcClientAccept* accptor)
-  :m_accptor(accptor)
+RpcTcpServerTransport::RpcTcpServerTransport(RpcClientAccept* accptor, MethodProtocol mProtocal)
+  : TcpServerTransport(mProtocal), m_accptor(accptor)
 {
   memset(m_procFunc, 0, sizeof(ProcFun) * YYRPC_PROTOCAL_MAX);
   m_procFunc[YYRPC_PROTOCAL_CALL] = &RpcTcpServerTransport::ProcessCall;
@@ -18,19 +18,27 @@ RpcTcpServerTransport::~RpcTcpServerTransport()
 
 }
 
-int RpcTcpServerTransport::OnRecvPacket(const Packet* rawPacket)
+int RpcTcpServerTransport::OnRecvPacket(uint32_t msgType, const char* data, int32_t len)
 {
-  uint16_t msgType = rawPacket->getMsgType();
-  if (m_procFunc[msgType])
-    return (this->*m_procFunc[msgType])(rawPacket);
+  if (msgType < _countof(m_procFunc) && m_procFunc[msgType])
+    return (this->*m_procFunc[msgType])(data, len);
 
   LOG(ERROR) << "unknown msg_type: " << msgType;
   return CR_INVALID_PACKET;
 }
 
-int RpcTcpServerTransport::ProcessCall(const Packet* rawPacket)
+int RpcTcpServerTransport::OnRecvPacket(const std::string& msgType, const char* data, int32_t len)
 {
-  std::string s(rawPacket->getBodyData(), rawPacket->getBodyLength());
+  if (msgType == "/method_request" && m_procFunc[YYRPC_PROTOCAL_CALL])
+    return  (this->*m_procFunc[YYRPC_PROTOCAL_CALL])(data, len);
+
+  LOG(ERROR) << "unknown msg_type: " << msgType;
+  return CR_INVALID_PACKET;
+}
+
+int RpcTcpServerTransport::ProcessCall(const char* data, int32_t len)
+{
+  std::string s(data, len);
 
   std::shared_ptr<msgpack::unpacker> unp = std::make_shared<msgpack::unpacker>();
   unp->reserve_buffer(s.size());
@@ -62,7 +70,7 @@ int RpcTcpServerTransport::OnRequireClose(int reason)
     SocketDisconnectMessage close;
     close.message_id = reason;
     std::stringstream s;
-    if (serialization_result_header(s, 0, "", 0))
+    if (serialization_result_header(s, "/method_result", 0, 0))
       SendResult(s);
   }
 
@@ -78,4 +86,15 @@ int RpcTcpServerTransport::OnAfterClose()
 bool RpcTcpServerTransport::SendResult(std::stringstream& s)
 {
   return m_accptor->QueueSend(shared_from_this(), s);
+}
+
+bool RpcTcpServerTransport::SendError(int64_t session_id,
+  const std::string& method_name_,
+  int32_t errNo)
+{
+  std::stringstream s;
+  if (!serialization_result_header(s, "/method_result", session_id, errNo))
+    return false;
+  SendResult(s);
+  return true;
 }

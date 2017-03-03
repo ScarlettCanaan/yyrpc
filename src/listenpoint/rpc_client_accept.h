@@ -19,7 +19,7 @@ struct ResultPacket
 class RpcClientAccept : public TcpAcceptor
 {
 public:
-  RpcClientAccept();
+  RpcClientAccept(MethodProtocol mProtocal);
   ~RpcClientAccept();
 public:
   virtual int Init(const std::string& ip, int port, uv_loop_t* loop = 0) override;
@@ -31,7 +31,11 @@ public:
 
   int _OnAsync(uv_async_t* handle);
   bool QueueSend(const std::weak_ptr<RpcTcpServerTransport>& conn, std::stringstream& s);
+
 private:
+  int DoSend(std::shared_ptr<ResultPacket>& packet);
+private:
+  MethodProtocol m_methodProtocal;
   uv_async_t* m_asyncHandle;
   ThreadSafeList<std::shared_ptr<ResultPacket>> m_resultList;
   std::list<std::shared_ptr<RpcTcpServerTransport>> m_rsConn;

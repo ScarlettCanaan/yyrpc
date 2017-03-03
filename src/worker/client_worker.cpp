@@ -61,7 +61,7 @@ int ClientWorker::_OnAsync(uv_async_t* handle)
   return 0;
 }
 
-int ClientWorker::_OnClose(uv_handle_t* handle)
+int ClientWorker::_OnDestory(uv_handle_t* handle)
 {
   uv_close((uv_handle_t*)&m_idler, NULL);
   return 0;

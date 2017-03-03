@@ -9,12 +9,15 @@
 #include <mutex>
 #include "msgpack.hpp"
 #include "callback.h"
+#include "st.h"
+#include "build_config.h"
 
 class RpcTcpServerTransport;
 class ICallback;
 
 struct CalleePacket
 {
+public:
   CalleePacket(const CallbackWrapper& wrapper_, 
     const std::shared_ptr<RpcTcpServerTransport>& endpoint_, 
     int64_t session_id_, 
@@ -22,7 +25,8 @@ struct CalleePacket
     std::shared_ptr<msgpack::unpacker>& unp_);
 
   bool run_impl() const;
-private:
+
+public:
   CallbackWrapper wrapper;
   int64_t session_id;
   std::string method_name;
@@ -35,6 +39,8 @@ class CalleeManager
 public:
   static CalleeManager& GetInstance();
 
+  int Init(bool useFiber, size_t maxFiberNum);
+  int UnInit();
 public:
   template <typename R, typename ... Args>
   bool BindApi(const std::string& method_name, 
@@ -46,7 +52,12 @@ public:
     const std::string& method_name, 
     std::shared_ptr<msgpack::unpacker> unp);
 
-  bool PumpMessage();
+  bool NOTHROW PumpMessage();
+  void NOTHROW _OnFiberWork();
+private:
+  int DoTask(const std::shared_ptr<CalleePacket>& task);
+  int NOTHROW DoTaskInFiber(const std::shared_ptr<CalleePacket>& task);
+  int DoTaskDirect(const std::shared_ptr<CalleePacket>& task);
 private:
   const CallbackWrapper& GetImpl(const std::string& method_name) const;
 private:
@@ -54,6 +65,12 @@ private:
   std::unordered_map<std::string, CallbackWrapper> m_callees;
 
   std::map<std::thread::id, std::list<std::shared_ptr<CalleePacket>>> m_specThreadCallee;
+
+  std::thread::id m_initThreadId;
+  bool m_useFiber;
+  size_t m_maxFiberNum;
+
+  std::unordered_map<st_thread_t, std::shared_ptr<CalleePacket>> m_fiberThreadMap;
 private:
   CalleeManager();
   ~CalleeManager();

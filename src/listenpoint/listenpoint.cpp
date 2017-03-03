@@ -2,8 +2,8 @@
 #include "rpc_client_accept.h"
 #include "util/util.h"
 
-ListenPoint::ListenPoint(const std::string& ip, int32_t port)
-  : m_ip(ip), m_port(port)
+ListenPoint::ListenPoint(const std::string& ip, int32_t port, MethodProtocol mProtocal)
+  : m_ip(ip), m_port(port), m_methodProtocal(mProtocal)
 {
   m_status = LPS_INIT;
 }
@@ -29,7 +29,7 @@ int ListenPoint::_DoWork()
 
   int r;
 
-  r = BindListen();
+  r = BindListen(m_methodProtocal);
   m_status = (r == 0 ? LPS_LISTEN_SUCC : LPS_LISTEN_FAIL);
   UV_CHECK_RET_1(BindListen, r);
 
@@ -48,22 +48,22 @@ int ListenPoint::_OnAsync(uv_async_t* handle)
   return 0;
 }
 
-int ListenPoint::_OnClose(uv_handle_t* handle)
+int ListenPoint::_OnDestory(uv_handle_t* handle)
 {
-  OnClose();
+  OnDestory();
   return 0;
 }
 
-int TcpListenPoint::BindListen()
+int TcpListenPoint::BindListen(MethodProtocol mProtocal)
 {
-  m_acceptor = std::make_shared<RpcClientAccept>();
+  m_acceptor = std::make_shared<RpcClientAccept>(mProtocal);
   if (m_acceptor->Init(m_ip, m_port, &m_loop) != 0)
     return -1;
  
   return m_acceptor->Listen();
 }
 
-void TcpListenPoint::OnClose()
+void TcpListenPoint::OnDestory()
 {
   m_acceptor.reset();
 }

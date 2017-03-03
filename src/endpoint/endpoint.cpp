@@ -12,8 +12,8 @@ CallerPacket::CallerPacket(uint64_t session_id, std::stringstream& s)
   m_data = s.str();
 }
 
-EndPoint::EndPoint(const std::string& ip, int32_t port)
-  : m_ip(ip), m_port(port)
+EndPoint::EndPoint(const std::string& ip, int32_t port, MethodProtocol mProtocal)
+  : m_ip(ip), m_port(port), m_methodProtocal(mProtocal)
 {
   m_tryCount = 0;
   m_nextTryTime = -1;
@@ -56,6 +56,7 @@ static void timer_cb_long(uv_timer_t* handle)
 
 int EndPoint::_OnTimerLong(uv_timer_t *handle)
 {
+
   if (IsFinalFailed())
   {
     std::lock_guard<std::mutex> l(m_resultMutex);
@@ -71,6 +72,16 @@ int EndPoint::_OnTimerLong(uv_timer_t *handle)
   return 0;
 }
 
+bool EndPoint::CheckCallTimeout(int64_t cur_time, const std::shared_ptr<IAsyncResult>& result)
+{
+  if (!result->is_timeouted(cur_time))
+    return false;
+  if (result->set_exception(YYRPC_ERROR_CALL_TIMEOUT))
+    CallerManager::GetInstance().OnResult(result->get_run_thread_id(), result);
+
+  return true;
+}
+
 int EndPoint::CheckCallTimeout()
 {
   std::lock_guard<std::mutex> l(m_resultMutex);
@@ -82,7 +93,8 @@ int EndPoint::CheckCallTimeout()
 
   for (auto it = m_pendingResult.begin(); it != m_pendingResult.end(); it = m_pendingResult.erase(it))
   {
-    if (!it->second->check_timeout(cur_time))
+    std::shared_ptr<IAsyncResult>& result = it->second;
+    if (!CheckCallTimeout(cur_time, result))
       break;
   }
 
@@ -97,7 +109,10 @@ int EndPoint::ReConnectIfNecessary()
   int64_t cur_time = 0;
   GetTimeMillSecond(&cur_time);
   if (cur_time > m_nextTryTime)
+  {
+    m_nextTryTime = -1;
     CreateChannel();
+  }
 
   return 0;
 }
@@ -177,10 +192,10 @@ int EndPoint::_OnAsyncWork(uv_async_t* handle)
   return 0;
 }
 
-int EndPoint::_OnClose(uv_handle_t* handle)
+int EndPoint::_OnDestory(uv_handle_t* handle)
 {
   uv_close((uv_handle_t*)&timer_long, 0);
-  OnClose();
+  OnDestory();
   return 0;
 }
 
@@ -202,11 +217,24 @@ int TcpEndPoint::DoTask(const std::shared_ptr<CallerPacket>& task)
   if (GetConnectStatus() != CS_CONNECTED)
     return -1;
 
-  int r = Send(YYRPC_PROTOCAL_CALL, task->m_data.c_str(), task->m_data.length());
+  int r = -1;
+  if (m_methodProtocal == MP_HTTP)
+  {
+    std::string s = "GET /method_request HTTP/1.1\r\n"
+      "Content-Type: application/json; charset=utf-8\r\n"
+      "Content-Length: ";
+    s += NumberToString(task->m_data.length());
+    s += "\r\n\r\n";
+    s.append(task->m_data.c_str(), task->m_data.length());
+    r = Send(s.c_str(), s.length());
+  }
+  else
+  {
+    r = Send(YYRPC_PROTOCAL_CALL, task->m_data.c_str(), task->m_data.length());
+  }
+
   if (r < 0)
     Close(CR_PEER_CLOSED);
-  else
-    m_tryCount = 0;
   return r;
 }
 
@@ -216,14 +244,16 @@ void TcpEndPoint::CreateChannel()
     Connect(GetIp(), GetPort(), &m_loop);
 }
 
-void TcpEndPoint::OnClose()
+void TcpEndPoint::OnDestory()
 {
-  
+
 }
 
-int TcpEndPoint::OnProcessResult(const Packet* rawPacket)
+int TcpEndPoint::OnProcessResult(const char* data, int32_t len)
 {
-  std::string s(rawPacket->getBodyData(), rawPacket->getBodyLength());
+  m_tryCount = 0;
+
+  std::string s(data, len);
 
   msgpack::unpacker unp;
   unp.reserve_buffer(s.size());
@@ -235,10 +265,21 @@ int TcpEndPoint::OnProcessResult(const Packet* rawPacket)
   unp.buffer_consumed(actual_read_size);
 
   int32_t session_id = 0;
-  std::string method_name;
-  if (!unserialization_header(unp, session_id, method_name))
+  std::string msgType;
+  int32_t error_id = 0;
+  if (!unserialization_result_header(unp, msgType, session_id, error_id))
     return -1;
 
+  if (msgType == "/method_result")
+    return OnCallResult(session_id, error_id, unp);
+  else if (msgType == "/fire_event")
+    return OnFireEvent(session_id, error_id, unp);
+
+  return 0;
+}
+
+int TcpEndPoint::OnCallResult(int32_t session_id, int32_t error_id, msgpack::unpacker& unp)
+{
   std::shared_ptr<IAsyncResult> result;
   {
     std::lock_guard<std::mutex> l(m_resultMutex);
@@ -249,24 +290,20 @@ int TcpEndPoint::OnProcessResult(const Packet* rawPacket)
     m_pendingResult.erase(it);
   }
 
-  msgpack::object_handle o;
-  if (!unp.next(o))
-    return -1;
-
-  int32_t error_id = o.get().as<int32_t>();
   if (error_id != 0)
   {
-    result->set_exception(error_id);
+    if (result->set_exception(error_id))
+      CallerManager::GetInstance().OnResult(result->get_run_thread_id(), result);
   }
-  else if (!result->set_result(unp))
+  else if (result->set_result(unp))
   {
-    return -1;
+    CallerManager::GetInstance().OnResult(result->get_run_thread_id(), result);
   }
 
   return 0;
 }
 
-int TcpEndPoint::OnProcessEvent(const Packet* rawPacket)
+int TcpEndPoint::OnFireEvent(int32_t session_id, int32_t error_id, msgpack::unpacker& unp)
 {
   return 0;
 }
@@ -282,11 +319,7 @@ int TcpEndPoint::OnAfterClose()
 { 
   int64_t cur_time = 0;
   GetTimeMillSecond(&cur_time);
-  if (m_nextTryTime == -1)
-    m_nextTryTime = cur_time + 1000;
-  else
-    m_nextTryTime = cur_time + std::pow(2, m_tryCount) * 1000;
-
+  m_nextTryTime = cur_time + std::pow(2, m_tryCount) * 1000;
   m_tryCount++;
   return 0;
 }

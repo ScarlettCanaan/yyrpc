@@ -44,6 +44,7 @@ set(LIBRARY_SRCS
   yyrpc.h
   yyrpc.cpp
   error_def.h
+  build_config.h
   method.h
   property.h
   serialization.h
@@ -98,6 +99,8 @@ include_directories(
   ${BOOST_INCLUDE_DIR}
   ${CMAKE_SOURCE_DIR}/src/yyrpc/src
   ${MSGPACK_INCLUDE_DIR}
+  ${ST_INCLUDE_DIR}
+  ${HTTP_PARSER_INCLUDE_DIR}
 )
 
 add_library(${LIBRARY_NAME} STATIC

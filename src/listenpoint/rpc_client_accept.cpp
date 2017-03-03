@@ -9,7 +9,8 @@ ResultPacket::ResultPacket(const std::weak_ptr<RpcTcpServerTransport>& conn_, st
  
 }
 
-RpcClientAccept::RpcClientAccept()
+RpcClientAccept::RpcClientAccept(MethodProtocol mProtocal)
+  : m_methodProtocal(mProtocal)
 {
   m_asyncHandle = (uv_async_t*)malloc(sizeof(uv_async_t));
   m_asyncHandle->data = 0;
@@ -45,12 +46,35 @@ int RpcClientAccept::_OnAsync(uv_async_t* handle)
   std::list<std::shared_ptr<ResultPacket>> result;
   m_resultList.clone(result);
   for (std::list<std::shared_ptr<ResultPacket>>::iterator it = result.begin(); it != result.end(); ++it)
+    DoSend(*it);
+
+  return 0;
+}
+
+int RpcClientAccept::DoSend(std::shared_ptr<ResultPacket>& packet)
+{
+  std::shared_ptr<RpcTcpServerTransport> conn = packet->conn.lock();
+  if (!conn)
   {
-    std::shared_ptr<RpcTcpServerTransport> conn = it->get()->conn.lock();
-    if (conn)
-      conn->Send(YYRPC_PROTOCAL_RESULT, it->get()->data.c_str(), it->get()->data.length());
+    return -1;
   }
 
+  int r = -1;
+  if (m_methodProtocal == MP_HTTP)
+  {
+    std::string s = "HTTP/1.1 200 OK\r\n"
+      "Content-Type: application/json; charset=utf-8\r\n"
+      "Content-Length: ";
+    s += NumberToString(packet->data.length());
+    s += "\r\n\r\n";
+    s.append(packet->data.c_str(), packet->data.length());
+    r = conn->Send(s.c_str(), s.length());
+  }
+  else
+  {
+    r = conn->Send(YYRPC_PROTOCAL_RESULT, packet->data.c_str(), packet->data.length());
+  }
+  
   return 0;
 }
 
@@ -73,7 +97,7 @@ int RpcClientAccept::UnInit()
 
 TcpServerTransport* RpcClientAccept::NewTcpServerTransport()
 { 
-  std::shared_ptr<RpcTcpServerTransport> conn = std::make_shared<RpcTcpServerTransport>(this);
+  std::shared_ptr<RpcTcpServerTransport> conn = std::make_shared<RpcTcpServerTransport>(this, m_methodProtocal);
   conn->SetConnected();
   RegisterTransport(conn);
   return conn.get();

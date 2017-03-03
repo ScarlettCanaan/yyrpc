@@ -28,15 +28,10 @@ public:
   CallbackWrapper(const std::shared_ptr < ICallback >& cb, std::thread::id id) 
     : callback(cb), call_thread_id(id) {}
 public:
-  bool Invork(msgpack::unpacker& unp, 
-    int64_t session_id, 
-    const std::string& method_name_, 
-    const std::shared_ptr<RpcTcpServerTransport>& transport) const
-  {
-    if (!callback)
-      return false;
-    return callback->Invork(unp, session_id, method_name_, transport);
-  }
+  bool Invork(msgpack::unpacker& unp,
+    int64_t session_id,
+    const std::string& method_name_,
+    const std::shared_ptr<RpcTcpServerTransport>& transport) const;
 
   operator bool() const { return callback.get() != 0; }
   std::thread::id get_call_thread_id() const { return call_thread_id; }
@@ -45,8 +40,18 @@ private:
   std::thread::id call_thread_id;
 };
 
+inline bool CallbackWrapper::Invork(msgpack::unpacker& unp,
+  int64_t session_id,
+  const std::string& method_name_,
+  const std::shared_ptr<RpcTcpServerTransport>& transport) const
+{
+  if (!callback)
+    return false;
+  return callback->Invork(unp, session_id, method_name_, transport);
+}
+
 template <typename T>
-struct TRpcCallback ;
+struct TRpcCallback;
 
 template <typename R, typename ... Args>
 struct TRpcCallback < R(Args...) > : public ICallback
@@ -90,11 +95,13 @@ bool TRpcCallback < R(Args...) >::Invork(msgpack::unpacker& unp,
   std::tuple<Args...> t;
   if (!CheckAndUnSerialization(unp, t))
     return false;
-
   R r = invoke_with_tuple<R, sizeof...(Args)>(m_func, t);
+
   std::stringstream s;
-  serialization_result_header(s, session_id, method_name_, 0);
-  serialization(s, r);
+  if (!serialization_result_header(s, "/method_result", session_id, 0))
+    return false;
+  if (!serialization(s, r))
+    return false;
   transport->SendResult(s);
   return true;
 }
@@ -108,18 +115,27 @@ struct TRpcCallback < R(void) > : public ICallback
   virtual bool Invork(msgpack::unpacker& unp,
     int64_t session_id,
     const std::string& method_name_,
-    const std::shared_ptr<RpcTcpServerTransport>& transport) const override
-  {
-    R r = m_func();
-    std::stringstream s;
-    serialization_result_header(s, session_id, method_name_, 0);
-    serialization(s, r);
-    transport->SendResult(s);
-    return true;
-  }
+    const std::shared_ptr<RpcTcpServerTransport>& transport) const override;
 private:
   std::function<R(void)>	m_func;
 };
+
+template <typename R>
+bool TRpcCallback < R(void) >::Invork(msgpack::unpacker& unp,
+  int64_t session_id,
+  const std::string& method_name_,
+  const std::shared_ptr<RpcTcpServerTransport>& transport) const
+{
+  R r = m_func();
+
+  std::stringstream s;
+  if (!serialization_result_header(s, "/method_result", session_id, 0))
+    return false;
+  if (!serialization(s, r))
+    return false;
+  transport->SendResult(s);
+  return true;
+}
 
 template <>
 struct TRpcCallback < void(void) > : public ICallback
@@ -130,13 +146,18 @@ struct TRpcCallback < void(void) > : public ICallback
   virtual bool Invork(msgpack::unpacker& unp,
     int64_t session_id,
     const std::string& method_name_,
-    const std::shared_ptr<RpcTcpServerTransport>& transport) const override
-  {
-    m_func();
-    return true;
-  }
+    const std::shared_ptr<RpcTcpServerTransport>& transport) const override;
 private:
   std::function<void(void)>	m_func;
 };
+
+inline bool TRpcCallback<void(void)>::Invork(msgpack::unpacker& unp,
+  int64_t session_id,
+  const std::string& method_name_,
+  const std::shared_ptr<RpcTcpServerTransport>& transport) const
+{
+  m_func();
+  return true;
+}
 
 #endif  //! #ifndef YYRPC_CALLBACK_H_

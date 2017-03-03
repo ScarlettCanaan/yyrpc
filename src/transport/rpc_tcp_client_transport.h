@@ -10,20 +10,19 @@
 class RpcTcpClientTransport : public TcpClientTransport
 {
 public:
-  RpcTcpClientTransport();
+  RpcTcpClientTransport(MethodProtocol mProtocal);
   ~RpcTcpClientTransport();
 public:
-  virtual int OnRecvPacket(const Packet* rawPacket) override;
+  virtual int OnRecvPacket(uint32_t msgType, const char* data, int32_t len) override;
+  virtual int OnRecvPacket(const std::string& msgType, const char* data, int32_t len) override;
   virtual int OnRequireClose(int reason) override { return 0; }
   virtual int OnAfterClose() override { return 0; }
 private:
-  int ProcessResult(const Packet* rawPacket);
-  int ProcessEvent(const Packet* rawPacket);
+  int ProcessResult(const char* data, int32_t len);
 
-  virtual int OnProcessResult(const Packet* rawPacket) = 0;
-  virtual int OnProcessEvent(const Packet* rawPacket) = 0;
+  virtual int OnProcessResult(const char* data, int32_t len) = 0;
 private:
-  typedef int (RpcTcpClientTransport::*ProcFun)(const Packet* rawPacket);
+  typedef int (RpcTcpClientTransport::*ProcFun)(const char* data, int32_t len);
   ProcFun m_procFunc[YYRPC_PROTOCAL_MAX];
 };
 
