@@ -10,13 +10,13 @@ int main(int argc, char *argv[])
   if (!InitRpc("./config.cfg"))
     return -1;
   
-  bench_call();
+  bench_tiny_call();
+  //bench_call();
   //client_caller();
 
   while (true)
   {
     RunRpc();
-    uv_sleep(1);
   }
 
   UnInitRpc();
