@@ -16,6 +16,7 @@ include_directories(
   ${CMAKE_SOURCE_DIR}/src/yyrpc/proto
   ${CMAKE_SOURCE_DIR}/src/yyrpc/src
   ${MSGPACK_INCLUDE_DIR}
+  ${ST_INCLUDE_DIR}
 )
 
 add_executable(${EXECUTABLE_NAME}
@@ -34,6 +35,8 @@ target_link_libraries(${EXECUTABLE_NAME}
   ${GFLAGS_LIBRARIES}
   ${LIBUV_LIBRARIES}
   ${BREAKPAD_LIBRARIES}
+  ${ST_LIBRARIES}
+  ${HTTP_PARSER_LIBRARIES}
 )
 
 if(WIN32)
