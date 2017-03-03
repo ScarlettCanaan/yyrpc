@@ -11,7 +11,7 @@ int server_callee()
     std::cout << "Hello World!" << std::endl;
   });
 
-  SimpleAPi::Sum.bind<any_thread>([](int a, int b) -> int
+  SimpleAPi::Sum.bind<any_thread_t>([](int a, int b) -> int
   {
     //std::cout << "sum:" << a + b << std::endl;
     return a + b;

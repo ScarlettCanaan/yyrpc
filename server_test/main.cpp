@@ -15,7 +15,6 @@ int main(int argc, char *argv[])
   while (true)
   {
     RunRpc();
-    uv_sleep(1);
   }
 
   UnInitRpc();
