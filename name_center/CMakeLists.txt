@@ -4,30 +4,39 @@ set(EXECUTABLE_SRCS
   ../proto/common_api.h
   ../proto/test_api.h
   main.cpp
+  server.h
+  server.cpp
+  service_manager.h
+  service_manager.cpp
+  service_setting.h
+  service_setting.cpp
+  event_manager.h
+  event_manager.cpp
 )
 
 include_directories(
-  ${CMAKE_SOURCE_DIR}/src/uv_util
+  ${CMAKE_SOURCE_DIR}/src/base_util
   ${LIBUV_INCLUDE_DIR}
   ${GLOG_INCLUDE_DIR}
   ${GFLAGS_INCLUDE_DIR}
   ${BREAKPAD_INCLUDE_DIR}
   ${BOOST_INCLUDE_DIR}
-  ${CMAKE_SOURCE_DIR}/src/yyrpc/proto
   ${CMAKE_SOURCE_DIR}/src/yyrpc/src
   ${MSGPACK_INCLUDE_DIR}
   ${ST_INCLUDE_DIR}
+  ${RAPIDJSON_INCLUDE_DIR}
+  ${HTTP_PARSER_INCLUDE_DIR}
 )
 
 add_executable(${EXECUTABLE_NAME}
   ${EXECUTABLE_SRCS}
 )
 
-add_dependencies(${EXECUTABLE_NAME} yyrpc uv_util)
+add_dependencies(${EXECUTABLE_NAME} yyrpc base_util)
 
 target_link_libraries(${EXECUTABLE_NAME}
   yyrpc
-  uv_util
+  base_util
 )
 
 target_link_libraries(${EXECUTABLE_NAME}
@@ -37,6 +46,7 @@ target_link_libraries(${EXECUTABLE_NAME}
   ${BREAKPAD_LIBRARIES}
   ${ST_LIBRARIES}
   ${HTTP_PARSER_LIBRARIES}
+  ${BASE64_LIBRARIES}
 )
 
 if(WIN32)
@@ -53,6 +63,7 @@ elseif(UNIX)
 target_link_libraries(${EXECUTABLE_NAME}
   m 
   dl
+  tcmalloc
 )
 
 endif()

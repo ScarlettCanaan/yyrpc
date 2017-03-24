@@ -1,222 +1,96 @@
-#ifndef YYRPC_METHOD_H_
-#define YYRPC_METHOD_H_
+/*
+* The MIT License (MIT)
+*
+* Copyright (c) 2017-2018 youjing@yy.com
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+*/
 
+#ifndef ORPC_METHOD_H_
+#define ORPC_METHOD_H_
+
+#include "build_config.h"
 #include <string>
 #include <type_traits>
 #include <tuple>
-#include "type_traits/function_traits.h"
-#include "serialization.h"
-#include "unserialization.h"
-#include "callback.h"
-#include "caller_manager.h"
-#include "callee_manager.h"
+#include "marshal/serialization.h"
+#include "marshal/unserialization.h"
+#include "stub/callback.h"
+#include "stub/caller_manager.h"
+#include "stub/callee_manager.h"
 #include "endpoint/endpoint_manager.h"
 #include "id_generator.h"
 #include "endpoint/endpoint.h"
 
-class EndPoint;
+_START_ORPC_NAMESPACE_
 
-template<typename Func, std::size_t I = function_traits<Func>::nargs - 1>
-struct ParamIterator
-{
-  using define_type = typename function_traits<Func>::template argument<I>::type;
-  using raw_type = typename std::remove_cv<typename std::remove_reference<define_type>::type>::type;
-
-  template<typename... Args>
-  static bool pack(std::stringstream& s, const std::tuple<Args ...>& args);
-
-  template<typename... Args>
-  static bool unpack(msgpack::unpacker& unp, std::tuple<Args ...>& args);
-};
-
-template<typename Func, std::size_t I>
-  template<typename... Args>
-bool ParamIterator<Func, I>::pack(std::stringstream& s, const std::tuple<Args ...>& args)
-{
-  using param_type = typename std::tuple_element<I, std::tuple<Args ...>>::type;
-  static_assert(std::is_convertible<param_type, define_type>::value, "RPC_CALL_ERROR: argument type mismatch.");
-  bool r = serialization<raw_type>(s, std::get<I>(args));
-  if (!r)
-    return false;
-  return ParamIterator<Func, I - 1>::pack(s, args);
-}
-
-template<typename Func, std::size_t I>
-template<typename... Args>
-bool ParamIterator<Func, I>::unpack(msgpack::unpacker& unp, std::tuple<Args ...>& args)
-{
-  using param_type = typename std::tuple_element<I, std::tuple<Args ...>>::type;
-  static_assert(std::is_convertible<param_type, define_type>::value, "RPC_CALL_ERROR: argument type mismatch.");
-  bool r = unserialization<raw_type>(unp, std::get<I>(args));
-  if (!r)
-    return false;
-  return ParamIterator<Func, I - 1>::unpack(unp, args);
-}
-
-template<typename Func>
-struct ParamIterator < Func, 0 >
-{
-  using define_type = typename function_traits<Func>::template argument<0>::type;
-  using raw_type = typename std::remove_cv<typename std::remove_reference<define_type>::type>::type;
-
-  template<typename... Args>
-  static bool pack(std::stringstream& s, const std::tuple<Args ...>& args);
-
-  template<typename... Args>
-  static bool unpack(msgpack::unpacker& unp, std::tuple<Args ...>& args);
-};
-
-template<typename Func> 
-template<typename... Args>
-bool ParamIterator < Func, 0 >::pack(std::stringstream& s, const std::tuple<Args ...>& args)
-{
-  using param_type = typename std::tuple_element<0, std::tuple<Args ...>>::type;
-  static_assert(std::is_convertible<param_type, define_type>::value, "RPC_CALL_ERROR: argument type mismatch.");
-  return serialization<raw_type>(s, std::get<0>(args));
-}
-
-template<typename Func>
-template<typename... Args>
-bool ParamIterator < Func, 0 >::unpack(msgpack::unpacker& unp, std::tuple<Args ...>& args)
-{
-  using param_type = typename std::tuple_element<0, std::tuple<Args ...>>::type;
-  static_assert(std::is_convertible<param_type, define_type>::value, "RPC_CALL_ERROR: argument type mismatch.");
-  return unserialization<raw_type>(unp, std::get<0>(args));
-}
-
-template<typename Func, typename... Args>
-uint64_t CheckAndSerialization(std::stringstream& s, const std::string& method_name, Args ...args)
-{
-  uint64_t session_id = get_sessionid();
-  if (!serialization_call_header(s, session_id, method_name))
-    return -1;
-  using traits = function_traits < Func > ;
-  static_assert(sizeof...(args) == traits::nargs, "RPC_CALL_ERROR: argument count mismatch.");
-  if (!ParamIterator<Func>::pack(s, std::make_tuple(args...)))
-    return -1;
-  return session_id;
-}
-
-template<typename Func>
-uint64_t CheckAndSerialization(std::stringstream& s, const std::string& method_name)
-{
-  uint64_t session_id = get_sessionid();
-  if (!serialization_call_header(s, session_id, method_name))
-    return -1;
-  using traits = function_traits < Func > ;
-  static_assert(traits::nargs == 0, "RPC_CALL_ERROR: argument count mismatch.");
-  return session_id;
-}
-
-template<typename... Args>
-bool CheckAndUnSerialization(msgpack::unpacker& unp, std::tuple<Args ...>& args)
-{
-  return ParamIterator<void(Args...)>::unpack(unp, args);
-}
+class TcpPeer;
 
 template <typename Func>
 struct TRpcMethod;
 
-inline std::string CurrentNamespaceName(const std::string& prettyFunction)
+struct TRpcMethodName
 {
-  size_t colonsA = prettyFunction.find("__namespace__");
-  size_t colonsB = prettyFunction.rfind(" ", colonsA);
-  if (colonsA <= colonsB)
-    return "";
-
-  return prettyFunction.substr(colonsB, colonsA - colonsB);
-}
-
-template <typename R, typename ... Args>
-struct TRpcMethod < R(Args...) >
-{
-  TRpcMethod(const std::string& name, const std::string& ns) 
-  { fullname_ = ns + name; }
-
-public:
-  template<typename ... Args2>
-  AsyncResultWrapper<R> operator()(Args2... args) const;
-
-  template<typename ... Args2>
-  AsyncResultWrapper<R> operator()(const EndPointWrapper& wrapper, Args2... args) const;
-
-  AsyncResultWrapper<R> operator()() const;
-
-  AsyncResultWrapper<R> operator()(const EndPointWrapper& wrapper) const;
-
-  template <typename T = this_thread_t>
-  bool bind(std::function<R(Args...)> func) const;
-private:
-  std::string	fullname_;
+  std::string	m_fullName;
+  std::vector<std::string> m_vParamName;
 };
 
 template <typename R, typename ... Args>
-template<typename ... Args2>
-AsyncResultWrapper<R> TRpcMethod < R(Args...) >::operator()(Args2... args) const
+struct TRpcMethod <R(Args...)>
 {
-  auto wrapper = EndPointManager::GetInstance().QueryEndPoint(fullname_);
-  if (!wrapper)
-    return AsyncResultWrapper<R>(YYRPC_ERROR_CANT_FIND_METHOD);
-  std::stringstream s;
-  uint64_t session_id = CheckAndSerialization<R(Args...)>(s, fullname_, args...);
-  auto r = wrapper.endpoint->Call<R>(session_id, s);
-  CallerManager::GetInstance().TryBlock(r);
-  return r;
-}
+public:
+  TRpcMethod(const std::string& name, 
+    const std::string& ns, 
+    const char* funcStr);
 
-template <typename R, typename ... Args>
-template<typename ... Args2>
-AsyncResultWrapper<R> TRpcMethod < R(Args...) >::operator()(const EndPointWrapper& wrapper, Args2... args) const
-{
-  if (!wrapper)
-    return AsyncResultWrapper<R>(YYRPC_ERROR_ENDPOINT_INVALID);
-  std::stringstream s;
-  uint64_t session_id = CheckAndSerialization<R(Args...)>(s, fullname_, args...);
-  auto r = wrapper.endpoint->Call<R>(session_id, s);
-  CallerManager::GetInstance().TryBlock(r);
-  return r;
-}
+  ~TRpcMethod();
+public:
+  template<typename ... Args2>
+  CallResultWrapper<R> operator()(Args2... args) const;
 
-template <typename R, typename ... Args>
-AsyncResultWrapper<R> TRpcMethod < R(Args...) >::operator()() const
-{
-  auto wrapper = EndPointManager::GetInstance().QueryEndPoint(fullname_);
-  if (!wrapper)
-    return AsyncResultWrapper<R>(YYRPC_ERROR_CANT_FIND_METHOD);
-  std::stringstream s;
-  uint64_t session_id = CheckAndSerialization<R(void)>(s, fullname_);
-  auto r = wrapper.endpoint->Call<R>(session_id, s);
-  CallerManager::GetInstance().TryBlock(r);
-  return r;
-}
+  template<typename ... Args2>
+  CallResultWrapper<R> operator()(const EndPointWrapper& wrapper, Args2... args) const;
 
-template <typename R, typename ... Args>
-AsyncResultWrapper<R> TRpcMethod < R(Args...) >::operator()(const EndPointWrapper& wrapper) const
-{
-  if (!wrapper)
-    return AsyncResultWrapper<R>(YYRPC_ERROR_ENDPOINT_INVALID);
-  std::stringstream s;
-  uint64_t session_id = CheckAndSerialization<R(void)>(s, fullname_);
-  auto r = wrapper.endpoint->Call<R>(session_id, s);
-  CallerManager::GetInstance().TryBlock(r);
-  return r;
-}
+  CallResultWrapper<R> operator()() const;
+  CallResultWrapper<R> operator()(const EndPointWrapper& wrapper) const;
 
-template <typename R, typename ... Args>
-template <typename T>
-bool TRpcMethod < R(Args...) >::bind(std::function<R(Args...)> func) const
-{
-  return CalleeManager::GetInstance().BindApi(fullname_, func, std::is_same<T, this_thread_t>::value);
-}
+  template <typename T = this_thread_t>
+  bool Bind(const std::function<R(Args...)>& func) const;
+
+  template <typename T = this_thread_t>
+  bool BindWithPeer(const std::function<R(TcpPeer*, Args...)>& func) const;
+private:
+  TRpcMethodName* m_name;
+};
+
+#include "method.inl"
 
 #ifdef WIN32
-#define YYRPC_METHOD(method_name, ...) \
-inline std::string __namespace__##method_name() { return CurrentNamespaceName(__FUNCSIG__); }\
-static const TRpcMethod<__VA_ARGS__> method_name{ #method_name, __namespace__##method_name()};
+#define ORPC_METHOD(method_name, func) \
+inline std::string __namespace__##method_name() { return orpc::CurrentNamespaceName(__FUNCSIG__); }\
+static const orpc::TRpcMethod<func> method_name{ #method_name, __namespace__##method_name(), #func};
 #else
-#define YYRPC_METHOD(method_name, ...) \
-inline std::string __namespace__##method_name() { return CurrentNamespaceName(__PRETTY_FUNCTION__); }\
-static const TRpcMethod<__VA_ARGS__> method_name{ #method_name, __namespace__##method_name()};
+#define ORPC_METHOD(method_name, func) \
+inline std::string __namespace__##method_name() { return orpc::CurrentNamespaceName(__PRETTY_FUNCTION__); }\
+static const orpc::TRpcMethod<func> method_name{ #method_name, __namespace__##method_name(), #func};
 #endif
 
-#endif  //! #ifndef YYRPC_METHOD_H_
+_END_ORPC_NAMESPACE_
+
+#endif  //! #ifndef ORPC_METHOD_H_

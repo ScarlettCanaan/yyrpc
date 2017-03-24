@@ -1,34 +1,49 @@
+/*
+* The MIT License (MIT)
+*
+* Copyright (c) 2017-2018 youjing@yy.com
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+*/
+
 #include "client_worker.h"
-#include "util/util.h"
-#include "async_result.h"
+
+#ifndef ORPC_USE_FIBER
+
+#include "../util/base_util.h"
+#include "../stub/call_result.h"
+
+_START_ORPC_NAMESPACE_
 
 ClientWorker::ClientWorker()
 {
-
+  Start();
 }
 
 ClientWorker::~ClientWorker()
 {
-
-}
-
-int ClientWorker::Init()
-{
-  Start();
-
-  return 0;
-}
-
-int ClientWorker::UnInit()
-{
   Stop();
 
-  std::shared_ptr<IAsyncResult> null;
+  std::shared_ptr<ICallResult> null;
   QueueTask(null);
 
   Join();
-
-  return 0;
 }
 
 static void idle_cb(uv_idle_t *handle) {
@@ -69,10 +84,10 @@ int ClientWorker::_OnDestory(uv_handle_t* handle)
 
 int ClientWorker::_OnIdle(uv_idle_t *handle)
 {
-  std::list<std::shared_ptr<IAsyncResult>> clone_request;
+  std::list<std::shared_ptr<ICallResult>> clone_request;
   m_taskList.clone(clone_request);
 
-  std::list<std::shared_ptr<IAsyncResult>> retry_request;
+  std::list<std::shared_ptr<ICallResult>> retry_request;
 
   auto it = clone_request.begin();
   for (; it != clone_request.end(); ++it)
@@ -89,18 +104,23 @@ int ClientWorker::_OnIdle(uv_idle_t *handle)
   return 0;
 }
 
-int ClientWorker::QueueTask(const std::shared_ptr<IAsyncResult>& task)
+int ClientWorker::QueueTask(const std::shared_ptr<ICallResult>& task)
 {
   m_taskList.push_back(task);
   return 0;
 }
 
-int ClientWorker::DoTask(const std::shared_ptr<IAsyncResult>& task)
+int ClientWorker::DoTask(const std::shared_ptr<ICallResult>& task)
 {
   if (!task)
     return 0;
 
-  task->run_callback();
+  task->RunCallback();
 
   return 0;
 }
+
+_END_ORPC_NAMESPACE_
+
+#endif //! #ifndef ORPC_USE_FIBER
+

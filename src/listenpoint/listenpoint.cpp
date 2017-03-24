@@ -1,9 +1,35 @@
-#include "listenpoint.h"
-#include "rpc_client_accept.h"
-#include "util/util.h"
+/*
+* The MIT License (MIT)
+*
+* Copyright (c) 2017-2018 youjing@yy.com
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+*/
 
-ListenPoint::ListenPoint(const std::string& ip, int32_t port, MethodProtocol mProtocal)
-  : m_ip(ip), m_port(port), m_methodProtocal(mProtocal)
+#include "listenpoint.h"
+#include "../acceptor/rpc_client_accept.h"
+#include "../util/base_util.h"
+
+_START_ORPC_NAMESPACE_
+
+ListenPoint::ListenPoint(const std::string& ip, int32_t port, int32_t flags)
+: m_ip(ip), m_port(port), m_transportFlags(flags)
 {
   m_status = LPS_INIT;
 }
@@ -29,7 +55,7 @@ int ListenPoint::_DoWork()
 
   int r;
 
-  r = BindListen(m_methodProtocal);
+  r = BindListen(m_transportFlags);
   m_status = (r == 0 ? LPS_LISTEN_SUCC : LPS_LISTEN_FAIL);
   UV_CHECK_RET_1(BindListen, r);
 
@@ -54,9 +80,9 @@ int ListenPoint::_OnDestory(uv_handle_t* handle)
   return 0;
 }
 
-int TcpListenPoint::BindListen(MethodProtocol mProtocal)
+int TcpListenPoint::BindListen(int32_t flags)
 {
-  m_acceptor = std::make_shared<RpcClientAccept>(mProtocal);
+  m_acceptor = std::make_shared<RpcClientAccept>(flags);
   if (m_acceptor->Init(m_ip, m_port, &m_loop) != 0)
     return -1;
  
@@ -68,3 +94,4 @@ void TcpListenPoint::OnDestory()
   m_acceptor.reset();
 }
 
+_END_ORPC_NAMESPACE_

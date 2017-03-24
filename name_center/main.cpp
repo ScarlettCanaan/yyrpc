@@ -1,14 +1,15 @@
-﻿#include <iostream>
+#include <iostream>
 #include <string>
-#include "yyrpc.h"
+#include "orpc.h"
+#include "server.h"
+#include "rpc_application.h"
 
 using namespace std;
 
 int main(int argc, char *argv[])
 {
-  if (!InitRpc("./config.cfg"))
-    return -1;
+  NameServerApp app("./config.cfg");
+  app.Run(ART_DEFAULT);
 
-  getchar();
   return 0;
 }

@@ -1,23 +1,15 @@
-﻿#include <iostream>
+#include <iostream>
 #include <string>
 #include "server.h"
-#include "yyrpc.h"
+#include "rpc_application.h"
 
 using namespace std;
+using namespace orpc;
 
 int main(int argc, char *argv[])
 {
-  if (!InitRpc("./config.cfg"))
-    return -1;
-
-  server_callee();
-
-  while (true)
-  {
-    RunRpc();
-  }
-
-  UnInitRpc();
+  ServerApp app("./config.cfg");
+  app.Run(ART_DEFAULT);
 
   return 0;
 }

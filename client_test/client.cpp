@@ -1,145 +1,229 @@
-﻿#include <iostream>
+#include <iostream>
 #include <string>
-#include "test_api.h"
+#include "../proto/test_api.h"
 #include "client.h"
-#include "yyrpc.h"
+#include "orpc.h"
+#include "rpc_application.h"
+#include <assert.h>
+#include "glog/logging.h"
 
-int client_caller()
+using namespace orpc;
+
+ClientApp::ClientApp(const char* cfgFile)
 {
-  SimpleAPi::Hello();
+  bool bInited = RpcClientApplication::Init(cfgFile);
+  if (!bInited)
+    throw std::runtime_error("failed to init rpc.");
 
-  auto endpoint = CreateEndPoint("127.0.0.1", 1234, TP_TCP);
-  SimpleAPi::Sum(endpoint, 1, 2).then<any_thread_t>(
-  [](int sum)
+  Family family;
+  family.address = "Guangdong Zhuhai";
+  family.family_name = "YY";
+
+  Person person;
+  person.name = "Adapter";
+  person.sex = Male;
+  for (int i = 0; i < 4; ++i)
   {
-    std::cout << "sum:" << sum << std::endl;
-  },
-  [](int error)
-  {
-    std::cout << "error:" << error << std::endl;
+    person.person_id = i;
+    person.age = 18 + i;
+    family.members.push_back(person);
   }
-  );
 
-  Request r;
-  r.memberDouble = 0.01f;
-  r.memberString = "Adapter";
-  std::vector<int> v;
-  auto response = TestAPi::TestMethod(endpoint, v, "", 1.0f, r);
-
-  try
+  for (int i = 0; i < 100; ++i)
   {
-    Response resp = response.wait();
-    std::cout << resp.memberMap[1] << std::endl;
-  }
-  catch (std::runtime_error& e)
-  {
-    std::cout << "runtime_error:" << e.what() << std::endl;
-  }
-  
-  return 0;
-}
-
-int do_call(EndPointWrapper& wrpper)
-{
-  try
-  {
-    int resp = SimpleAPi::Sum(wrpper, 1, 2);
-    if (resp != 3)
-      std::cout << "resp != 3" << std::endl;
-  }
-  catch (std::runtime_error& e)
-  {
-    std::cout << "runtime_error:" << e.what() << std::endl;
-  }
-  return 0;
-}
-
-int bench_single_thread_call()
-{
-  auto endpoint = CreateEndPoint("127.0.0.1", 4358, TP_TCP);
-  int64_t t1;
-  GetTimeMillSecond(&t1);
-  for (int i = 0; i < 100000; ++i)
-  {
-    do_call(endpoint);
-    if (i % 10000 != 0)
-      continue;
-    int64_t t3;
-    GetTimeSecond(&t3);
-    std::cout << i << " time:" << t3 << std::endl;
-  }
-  int64_t t2;
-  GetTimeMillSecond(&t2);
-
-  std::cout << "time:" << t2 - t1 << std::endl;
-  return 0;
-}
-
-int count = 0;
-
-#ifdef WIN32
-int NOTHROW do_tiny_call(EndPointWrapper& wrpper)
-{
-  int resp = SimpleAPi::Sum(wrpper, 1, 2);
-  ++count;
-  if (resp != 3)
-    std::cout << "resp != 3" << std::endl;
-
-  if (count % 10000 == 0)
-  {
-    int64_t t2;
-    GetTimeMillSecond(&t2);
-    std::cout << "count:" << count << " time:" << t2 << std::endl;
+    family.family_id = i;
+    m_familys.push_back(family);
   }
     
+  Init(cfgFile);
+}
+
+int ClientApp::Init(const char* cfgFile)
+{
+  m_mainThreadId = std::this_thread::get_id();
+
+  SubscribeEventNoParam();
+  SubscribeEventSimpleParam();
+  SubscribeEventUserDefineTypeParam();
+
+  CallTest();
+
   return 0;
 }
 
-#else
-int NOTHROW do_tiny_call(EndPointWrapper& wrpper)
+int ClientApp::UnInit()
 {
+  return 0;
+}
+
+void ClientApp::CallTest()
+{
+  FamilyApi::Hello();
+
+  SyncCallDemo();
+
+  AsyncCallDemo();
+
+  CallbackResultDemo();
+}
+
+void ClientApp::SyncCallDemo()
+{
+  std::vector<Family> fimilys;
   try
   {
-    int resp = SimpleAPi::Sum(wrpper, 1, 2);
-    ++count;
-    if (resp != 3)
-      std::cout << "resp != 3" << std::endl;
+    fimilys = FamilyApi::GetAllFamily();
   }
   catch (std::runtime_error& e)
   {
-    std::cout << "runtime_error:" << e.what() << std::endl;
+    std::cout << "FamilyApi::GetAllFamily runtime_error:" << e.what() << std::endl;
   }
 
-  if (count % 10000 == 0)
+  bool ret = false;
+  try
   {
-    int64_t t2;
-    GetTimeMillSecond(&t2);
-    std::cout << "count:" << count << " time:" << t2 << std::endl;
+    ret = FamilyApi::AddFamily(m_familys[0]);
+  }
+  catch (std::runtime_error& e)
+  {
+    std::cout << "FamilyApi::AddFamily runtime_error:" << e.what() << std::endl;
   }
 
-  return 0;
+  std::vector<Family> new_fimilys;
+  try
+  {
+    new_fimilys = FamilyApi::GetAllFamily();
+  }
+  catch (std::runtime_error& e)
+  {
+    std::cout << "FamilyApi::GetAllFamily runtime_error:" << e.what() << std::endl;
+  }
+
+  if (ret)
+  {
+    assert(new_fimilys.size() == fimilys.size() + 1);
+    LOG(ERROR) << "AddFamily successed. family_id: " << m_familys[0].family_id;
+  }
+  else
+  {
+    assert(new_fimilys.size() == fimilys.size());
+    LOG(ERROR) << "AddFamily failed. family_id: " << m_familys[0].family_id;
+  }
+
+  try
+  {
+    int32_t count = FamilyApi::GetFamilyCount();
+    if (count == 1)
+      count = FamilyApi::AddFamilyBatch(m_familys);
+    assert(count == 99 || count == 100);
+  }
+  catch (std::runtime_error& e)
+  {
+    std::cout << "FamilyApi::AddFamilyBatch runtime_error:" << e.what() << std::endl;
+    return;
+  }
+  
+  FamilyApi::SetFamilyName(0, "ZZ");
+
+  std::string familyName;
+  try
+  {
+    familyName = FamilyApi::GetFamilyName(0).Wait();
+    assert(familyName == "ZZ");
+  }
+  catch (std::runtime_error& e)
+  {
+    std::cout << "FamilyApi::GetAllFamily runtime_error:" << e.what() << std::endl;
+    return;
+  }
+
+  FamilyApi::SetFamilyName(0, "YY");  //reset
 }
-#endif
 
-int fiber_batch_tiny_call(EndPointWrapper& wrpper)
+void ClientApp::AsyncCallDemo()
 {
-  for (int i = 0; i < 100; ++i)
-    do_tiny_call(wrpper);
-  return 0;
+  auto deferRet = FamilyApi::GetAllFamily();
+
+  //////////////
+  // do somethings
+  /////////////
+
+  try
+  {
+    std::vector<Family> fimilys = deferRet.Wait();
+    assert(fimilys.size() == m_familys.size());
+  }
+  catch (std::runtime_error& e)
+  {
+    std::cout << "FamilyApi::GetAllFamily runtime_error:" << e.what() << std::endl;
+    return;
+  }
+
+  //wait again
+  std::vector<Family> fimilys = deferRet.Wait();
+  assert(fimilys.size() == m_familys.size());
 }
 
-int bench_tiny_call()
+void ClientApp::CallbackResultDemo()
 {
-  auto endpoint = CreateEndPoint("127.0.0.1", 4358, TP_TCP);
-  int64_t t1;
-  GetTimeMillSecond(&t1);
+#ifndef ORPC_USE_FIBER
+  FamilyApi::GetAllFamily().Then<any_thread_t>(
+    [this](const std::vector<Family>& fimilys)
+  {
+    assert(m_mainThreadId != std::this_thread::get_id());
+    assert(fimilys.size() == m_familys.size());
+  },
+    [](int error)
+  {
+    std::cout << "FamilyApi::GetAllFamily error:" << error << std::endl;
+  });
 
-  for (int i = 0; i < 1000; ++i)
-    CreateClientFiber(std::bind(fiber_batch_tiny_call, endpoint));
+  FamilyApi::GetAllFamily().Then(std::bind(&ClientApp::OnGetAllFamilysThisThread, this, std::placeholders::_1));
 
-  int64_t t2;
-  GetTimeMillSecond(&t2);
+  FamilyApi::GetAllFamily().Then<any_thread_t>(std::bind(&ClientApp::OnGetAllFamilysAnyThread, this, std::placeholders::_1),
+    std::bind(&ClientApp::OnGetAllFamilysError, this, std::placeholders::_1));
+#endif  //! #ifndef ORPC_USE_FIBER
+}
 
-  std::cout << "time:" << t2 - t1 << std::endl;
-  return 0;
+void ClientApp::OnGetAllFamilysThisThread(const std::vector<Family>& fimilys)
+{
+  assert(m_mainThreadId == std::this_thread::get_id());
+  assert(fimilys.size() == m_familys.size());
+}
+
+void ClientApp::OnGetAllFamilysAnyThread(const std::vector<Family>& fimilys)
+{
+  assert(m_mainThreadId != std::this_thread::get_id());
+  assert(fimilys.size() == m_familys.size());
+}
+
+void ClientApp::OnGetAllFamilysError(int32_t error)
+{
+  std::cout << "FamilyApi::GetAllFamily error:" << error << std::endl;
+}
+
+void ClientApp::SubscribeEventNoParam()
+{
+  FamilyEventApi::Haha.Subscribe([](void) { std::cout << "HaHa!" << std::endl; });
+}
+
+void ClientApp::SubscribeEventSimpleParam()
+{
+  FamilyEventApi::FamilyNameChanged.Subscribe(std::bind(&ClientApp::OnFamilyNameChanged, this, std::placeholders::_1, std::placeholders::_2));
+}
+
+void ClientApp::SubscribeEventUserDefineTypeParam()
+{
+  FamilyEventApi::FamilyAdded.Subscribe(std::bind(&ClientApp::OnFamilyAdded, this, std::placeholders::_1));
+}
+
+void ClientApp::OnFamilyNameChanged(int32_t family_id, const std::string& family_name)
+{
+  std::cout << "OnFamilyNameChanged family_id:" << family_id << " family_name:" << family_name << std::endl;
+}
+
+void ClientApp::OnFamilyAdded(const Family& new_family)
+{
+  std::cout << "OnFamilyAdded family_id:" << new_family.family_id << " family_name:" << new_family.family_name
+    << " address:" << new_family.address << " member_size:" << new_family.members.size() << std::endl;
 }
